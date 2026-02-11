@@ -1,0 +1,7 @@
+logs/
+__pycache__/
+*.pyc
+.env
+image/
+input/*.csv
+preprocessed_dataset/*.csv
