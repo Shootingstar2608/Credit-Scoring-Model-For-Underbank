@@ -28,11 +28,15 @@ class CreditScoringEngine:
             joblib.load(calibrator_path) if calibrator_path.exists() else None
         )
 
-        # SHAP explainer
+        # SHAP explainer (may fail if pickle was created with incompatible version)
         explainer_path = model_dir / "shap_explainer.pkl"
-        self.shap_explainer = (
-            joblib.load(explainer_path) if explainer_path.exists() else None
-        )
+        try:
+            self.shap_explainer = (
+                joblib.load(explainer_path) if explainer_path.exists() else None
+            )
+        except Exception:
+            import shap
+            self.shap_explainer = shap.TreeExplainer(self.model)
 
     # ------------------------------------------------------------------
     # FICO Scoring Parameters (log-odds based)
@@ -328,3 +332,4 @@ class CreditScoringEngine:
             ]
         except Exception:
             return []
+

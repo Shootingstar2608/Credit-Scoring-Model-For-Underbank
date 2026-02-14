@@ -34,6 +34,23 @@ Quy tắc:
 """
 
 # ============================================================
+# CHAT SYSTEM PROMPT (interactive Q&A)
+# ============================================================
+CHAT_SYSTEM_PROMPT = """\
+Bạn là tư vấn viên tín dụng AI tại ngân hàng Việt Nam.
+Bạn đang tư vấn cho một khách hàng vừa được chấm điểm tín dụng.
+Kết quả chấm điểm đã được cung cấp ở tin nhắn đầu tiên.
+
+Quy tắc:
+- Trả lời bằng tiếng Việt, thân thiện, chuyên nghiệp.
+- Dựa trên dữ liệu thực tế của khách hàng để tư vấn.
+- Đưa ra lời khuyên cụ thể, khả thi.
+- Trả lời ngắn gọn, tập trung vào câu hỏi (tối đa 200 từ).
+- KHÔNG bịa thêm thông tin ngoài dữ liệu được cung cấp.
+- Sử dụng emoji phù hợp để thân thiện hơn.
+"""
+
+# ============================================================
 # USER PROMPT TEMPLATE
 # ============================================================
 USER_PROMPT_TEMPLATE = """\
@@ -122,16 +139,37 @@ def _call_openrouter(api_key: str, system: str, user_msg: str, model: str) -> st
     return resp.choices[0].message.content
 
 
+def _call_openrouter_chat(api_key: str, messages: list[dict], model: str) -> str:
+    """Call OpenRouter with a full message list (for multi-turn chat)."""
+    from openai import OpenAI
+
+    client = OpenAI(
+        base_url=OPENROUTER_BASE_URL,
+        api_key=api_key,
+        default_headers={
+            "HTTP-Referer": "https://credit-scoring-demo.streamlit.app",
+            "X-Title": "Credit Scoring AI Advisor",
+        },
+    )
+    resp = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.5,
+        max_tokens=1500,
+    )
+    return resp.choices[0].message.content
+
+
 # ============================================================
 # Popular models on OpenRouter (curated list for UI)
 # ============================================================
 OPENROUTER_MODELS = {
     # --- Free models ---
-    "google/gemini-2.0-flash-exp:free": "🆓 Gemini 2.0 Flash (free)",
-    "meta-llama/llama-3.3-70b-instruct:free": "🆓 Llama 3.3 70B (free)",
-    "qwen/qwen3-235b-a22b:free": "🆓 Qwen3 235B (free)",
-    "deepseek/deepseek-chat-v3-0324:free": "🆓 DeepSeek V3 (free)",
-    "mistralai/mistral-small-3.1-24b-instruct:free": "🆓 Mistral Small 3.1 (free)",
+    "deepseek/deepseek-r1-0528:free": "🆓 DeepSeek R1 0528 (free)",
+    "nvidia/nemotron-3-nano-30b-a3b:free": "🆓 NVIDIA Nemotron 3 Nano (free)",
+    "stepfun/step-3.5-flash:free": "🆓 StepFun 3.5 Flash (free)",
+    "z-ai/glm-4.5-air:free": "🆓 GLM 4.5 Air (free)",
+    "arcee-ai/trinity-large-preview:free": "🆓 Arcee Trinity Large (free)",
     # --- Cheap models ---
     "google/gemini-2.5-flash-preview": "💰 Gemini 2.5 Flash (rẻ)",
     "openai/gpt-4o-mini": "💰 GPT-4o Mini ($0.15/1M)",
@@ -139,7 +177,16 @@ OPENROUTER_MODELS = {
     "deepseek/deepseek-chat": "💰 DeepSeek V3 ($0.27/1M)",
 }
 
-DEFAULT_MODEL = "google/gemini-2.0-flash-exp:free"
+DEFAULT_MODEL = "deepseek/deepseek-r1-0528:free"
+
+# Fallback chain: if primary model fails (429/404), try next one
+FALLBACK_MODELS = [
+    "deepseek/deepseek-r1-0528:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "stepfun/step-3.5-flash:free",
+    "z-ai/glm-4.5-air:free",
+    "arcee-ai/trinity-large-preview:free",
+]
 
 
 # ============================================================
@@ -166,7 +213,7 @@ def _template_assessment(
     shap_top = result.get("shap_top_features", [])
 
     lines = []
-    lines.append("## 🤖 Nhận Xét Tín Dụng Tự Động\n")
+    lines.append("##  Nhận Xét Tín Dụng Tự Động\n")
 
     # 1. Overview
     lines.append("### 1. Tổng quan")
@@ -177,7 +224,7 @@ def _template_assessment(
     # 2. Strengths
     safe_factors = [s for s in shap_top if s["direction"] == "safe"]
     if safe_factors:
-        lines.append("### 2. Điểm mạnh ✅")
+        lines.append("### 2. Điểm mạnh ")
         for s in safe_factors[:5]:
             name = feature_labels.get(s["feature"], s["feature"])
             lines.append(
@@ -188,7 +235,7 @@ def _template_assessment(
     # 3. Weaknesses
     risk_factors = [s for s in shap_top if s["direction"] == "risk"]
     if risk_factors:
-        lines.append("### 3. Điểm cần cải thiện ⚠️")
+        lines.append("### 3. Điểm cần cải thiện ")
         for s in risk_factors[:5]:
             name = feature_labels.get(s["feature"], s["feature"])
             lines.append(f"- **{name}**: Tăng rủi ro (SHAP = {s['shap_value']:+.4f})")
@@ -226,8 +273,7 @@ def _template_assessment(
 
     lines.append("\n---")
     lines.append(
-        "*Nhận xét được tạo tự động bằng template. "
-        "Nhập API key ở thanh bên để nhận phân tích chi tiết hơn từ AI.*"
+        "*Nhận xét được tạo tự động bằng hệ thống đánh giá nội bộ.*"
     )
 
     return "\n".join(lines)
@@ -349,31 +395,122 @@ class CreditAdvisor:
         # Build the prompt
         user_msg = self._build_prompt(result, user_input, feature_labels)
 
-        # Call OpenRouter
-        try:
-            text = _call_openrouter(self.api_key, SYSTEM_PROMPT, user_msg, self.model)
-            return AdvisorResult(
-                text=text,
-                provider="openrouter",
-                model=self.model,
-                success=True,
-            )
+        # Build model chain: primary model first, then fallbacks
+        models_to_try = [self.model]
+        for fb in FALLBACK_MODELS:
+            if fb != self.model:
+                models_to_try.append(fb)
 
-        except Exception as e:
-            logger.error("OpenRouter call failed: %s", e)
-            # Fallback to template
-            text = _template_assessment(result, user_input, feature_labels)
-            text += (
-                f"\n\n> ⚠️ *Lỗi khi gọi OpenRouter ({self.model}): {e}. "
-                f"Đã sử dụng nhận xét tự động.*"
-            )
-            return AdvisorResult(
-                text=text,
-                provider="template",
-                model=self.model,
-                success=False,
-                error=str(e),
-            )
+        # Try each model in chain
+        last_error = None
+        for model in models_to_try:
+            try:
+                logger.info("Trying model: %s", model)
+                text = _call_openrouter(self.api_key, SYSTEM_PROMPT, user_msg, model)
+                return AdvisorResult(
+                    text=text,
+                    provider="openrouter",
+                    model=model,
+                    success=True,
+                )
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                # Only retry on rate-limit (429) or not-found (404)
+                if "429" in error_str or "404" in error_str:
+                    logger.warning("Model %s failed (%s), trying next...", model, error_str[:80])
+                    continue
+                else:
+                    # Other errors (auth, network) — don't retry
+                    break
+
+        # All models failed — fallback to template
+        logger.error("All OpenRouter models failed. Last error: %s", last_error)
+        text = _template_assessment(result, user_input, feature_labels)
+        text += (
+            f"\n\n> *Lỗi khi gọi AI (đã thử {len(models_to_try)} model): {last_error}. "
+            f"Đã sử dụng nhận xét tự động.*"
+        )
+        return AdvisorResult(
+            text=text,
+            provider="template",
+            model=self.model,
+            success=False,
+            error=str(last_error),
+        )
+
+    # ----------------------------------------------------------
+    def chat(
+        self,
+        chat_messages: list[dict],
+        result: dict[str, Any],
+        user_input: dict[str, Any],
+        feature_labels: dict[str, str],
+    ) -> str:
+        """
+        Interactive chat: answer user questions about their credit score.
+
+        Parameters
+        ----------
+        chat_messages : list of {"role": "user"/"assistant", "content": "..."}
+        result : dict from CreditScoringEngine.predict()
+        user_input : raw user input dict
+        feature_labels : FEATURE_LABELS_VI from config
+
+        Returns
+        -------
+        str : AI response text
+        """
+        if not self.api_key:
+            return "⚠️ Chức năng tư vấn AI chưa được cấu hình."
+
+        # Build context from scoring result
+        context = self._build_prompt(result, user_input, feature_labels)
+
+        # Full message list: system + context + chat history
+        messages = [
+            {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"Đây là kết quả chấm điểm tín dụng của tôi:\n\n{context}",
+            },
+            {
+                "role": "assistant",
+                "content": (
+                    "Tôi đã xem kết quả chấm điểm tín dụng của bạn rồi. "
+                    "Bạn muốn tôi tư vấn gì ạ? 😊"
+                ),
+            },
+        ]
+        messages.extend(chat_messages)
+
+        # Try models with fallback
+        models_to_try = [self.model] + [
+            m for m in FALLBACK_MODELS if m != self.model
+        ]
+        last_error = None
+
+        for model in models_to_try:
+            try:
+                logger.info("Chat: trying model %s", model)
+                response = _call_openrouter_chat(self.api_key, messages, model)
+                # Strip any <think>...</think> reasoning blocks (DeepSeek R1)
+                import re
+                response = re.sub(
+                    r"<think>.*?</think>", "", response, flags=re.DOTALL
+                ).strip()
+                return response
+            except Exception as e:
+                last_error = e
+                if "429" in str(e) or "404" in str(e):
+                    logger.warning("Chat: model %s failed, trying next...", model)
+                    continue
+                break
+
+        return (
+            "⚠️ Không thể kết nối AI lúc này. Vui lòng thử lại sau.\n\n"
+            f"*Lỗi: {last_error}*"
+        )
 
     # ----------------------------------------------------------
     def _build_prompt(

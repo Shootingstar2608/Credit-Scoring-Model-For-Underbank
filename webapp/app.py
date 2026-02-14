@@ -3,6 +3,10 @@ Credit Scoring Web Application — Streamlit UI
 Đánh giá tín dụng cho người chưa có lịch sử tín dụng.
 """
 
+import os
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file (OPENROUTER_API_KEY, AI_MODEL)
+
 import sys
 from pathlib import Path
 
@@ -20,7 +24,7 @@ from config import (
     RISK_LEVELS,
     TIERS,
 )
-from scoring.advisor import DEFAULT_MODEL, OPENROUTER_MODELS, CreditAdvisor
+from scoring.advisor import CreditAdvisor
 from scoring.engine import CreditScoringEngine
 
 # ============================================================
@@ -148,36 +152,39 @@ st.markdown(
 # ============================================================
 with st.sidebar:
     # ---- AI Advisor config (top of sidebar) ----
-    with st.expander("🤖 Nhận Xét AI (OpenRouter)", expanded=False):
-        st.caption(
-            "Dùng [OpenRouter](https://openrouter.ai) để truy cập hàng trăm model AI "
-            "(bao gồm model miễn phí). Đăng ký tại openrouter.ai → lấy API key."
-        )
-        ai_api_key = st.text_input(
-            "🔑 OpenRouter API Key",
-            type="password",
-            help="Lấy key tại https://openrouter.ai/keys — Để trống để dùng template tự động (không cần AI).",
-        )
-        ai_model_preset = st.selectbox(
-            "🧠 Model gợi ý",
-            [""] + list(OPENROUTER_MODELS.keys()),
-            format_func=lambda x: (
-                "— Tự nhập bên dưới —" if x == "" else OPENROUTER_MODELS.get(x, x)
-            ),
-            index=1,  # default: first free model
-            help="Chọn model gợi ý hoặc chọn '— Tự nhập —' để điền tên model tùy ý.",
-        )
-        ai_model_custom = st.text_input(
-            "✏️ Hoặc nhập tên model",
-            value="",
-            placeholder="vd: google/gemini-2.0-flash-exp:free",
-            help="Nhập model ID từ openrouter.ai/models. Nếu điền ở đây sẽ ưu tiên hơn dropdown.",
-        )
-        ai_model = (
-            ai_model_custom.strip()
-            if ai_model_custom.strip()
-            else (ai_model_preset or DEFAULT_MODEL)
-        )
+    # with st.expander("🤖 Nhận Xét AI (OpenRouter)", expanded=False):
+    #     st.caption(
+    #         "Dùng [OpenRouter](https://openrouter.ai) để truy cập hàng trăm model AI "
+    #         "(bao gồm model miễn phí). Đăng ký tại openrouter.ai → lấy API key."
+    #     )
+    #     ai_api_key = st.text_input(
+    #         "🔑 OpenRouter API Key",
+    #         type="password",
+    #         help="Lấy key tại https://openrouter.ai/keys — Để trống để dùng template tự động (không cần AI).",
+    #     )
+    #     ai_model_preset = st.selectbox(
+    #         "🧠 Model gợi ý",
+    #         [""] + list(OPENROUTER_MODELS.keys()),
+    #         format_func=lambda x: (
+    #             "— Tự nhập bên dưới —" if x == "" else OPENROUTER_MODELS.get(x, x)
+    #         ),
+    #         index=1,  # default: first free model
+    #         help="Chọn model gợi ý hoặc chọn '— Tự nhập —' để điền tên model tùy ý.",
+    #     )
+    #     ai_model_custom = st.text_input(
+    #         "✏️ Hoặc nhập tên model",
+    #         value="",
+    #         placeholder="vd: google/gemini-2.0-flash-exp:free",
+    #         help="Nhập model ID từ openrouter.ai/models. Nếu điền ở đây sẽ ưu tiên hơn dropdown.",
+    #     )
+    #     ai_model = (
+    #         ai_model_custom.strip()
+    #         if ai_model_custom.strip()
+    #         else (ai_model_preset or DEFAULT_MODEL)
+    #     )
+
+    ai_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    ai_model = os.environ.get("AI_MODEL", "deepseek/deepseek-r1-0528:free")
 
     st.markdown("---")
     st.markdown("### 📝 Thông Tin Đăng Ký Vay")
@@ -679,7 +686,12 @@ def make_shap_chart(shap_top: list[dict]) -> go.Figure:
 if submitted:
     with st.spinner("Đang phân tích hồ sơ..."):
         result = engine.predict(user_input)
+    st.session_state.scoring_result = result
+    st.session_state.scoring_input = dict(user_input)
+    st.session_state.chat_messages = []  # Reset chat khi đánh giá mới
 
+if "scoring_result" in st.session_state:
+    result = st.session_state.scoring_result
     score = result["credit_score"]
     proba = result["probability"]
     risk = RISK_LEVELS[result["risk_key"]]
@@ -831,30 +843,17 @@ if submitted:
         for k, v in decision_data.items():
             st.markdown(f"**{k}:** {v}")
 
-    # ---- Row 3: AI Assessment ----
+    # ---- Row 3: Template Assessment (ALWAYS shown) ----
     st.markdown("---")
     st.markdown(
-        '<p class="section-title">🤖 Nhận Xét & Phân Tích AI</p>',
+        '<p class="section-title">📋 Nhận Xét Tín Dụng</p>',
         unsafe_allow_html=True,
     )
-
-    with st.spinner("Đang tạo nhận xét AI..."):
-        advisor = CreditAdvisor(
-            api_key=ai_api_key if ai_api_key else None,
-            model=ai_model,
-        )
-        ai_result = advisor.assess(result, user_input, FEATURE_LABELS_VI)
-
-    if ai_result.success:
-        if ai_result.provider == "openrouter":
-            model_label = OPENROUTER_MODELS.get(ai_result.model, ai_result.model)
-            st.caption(f"🌐 Nguồn: OpenRouter — {model_label}")
-        else:
-            st.caption("📝 Nguồn: Template tự động (nhập API key để dùng AI)")
-        st.markdown(ai_result.text)
-    else:
-        st.warning(f"Lỗi khi gọi AI: {ai_result.error}")
-        st.markdown(ai_result.text)
+    template_advisor = CreditAdvisor()  # No API key → always template
+    template_result = template_advisor.assess(
+        result, st.session_state.scoring_input, FEATURE_LABELS_VI
+    )
+    st.markdown(template_result.text)
 
     # ---- Row 4: Tiered System Legend ----
     st.markdown("---")
@@ -879,6 +878,68 @@ if submitted:
 """,
                 unsafe_allow_html=True,
             )
+
+    # ---- Row 5: AI Chatbot ----
+    st.markdown("---")
+    st.markdown(
+        '<p class="section-title">🤖 Hỏi Tư Vấn Viên AI</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Hỏi bất kỳ câu hỏi nào về hồ sơ tín dụng — "
+        "AI sẽ tư vấn dựa trên kết quả vừa chấm điểm."
+    )
+    st.warning(
+        "⚠️ **Lưu ý:** AI có thể mắc sai sót. Mọi câu trả lời chỉ mang tính "
+        "tham khảo, không phải cam kết từ ngân hàng. Luôn kiểm chứng thông tin "
+        "quan trọng với chuyên viên tư vấn.",
+        icon="⚠️",
+    )
+
+    if not ai_api_key:
+        st.info(
+            "💡 Tính năng tư vấn AI chưa được kích hoạt. "
+            "Vui lòng cấu hình OPENROUTER_API_KEY trong file .env."
+        )
+    else:
+        # Display chat history
+        for msg in st.session_state.get("chat_messages", []):
+            avatar = "👤" if msg["role"] == "user" else "🤖"
+            with st.chat_message(msg["role"], avatar=avatar):
+                st.markdown(msg["content"])
+
+        # Chat input form
+        with st.form("chat_form", clear_on_submit=True):
+            question = st.text_input(
+                "Câu hỏi",
+                placeholder="VD: Làm sao để tăng điểm tín dụng của tôi?",
+                label_visibility="collapsed",
+            )
+            send_btn = st.form_submit_button(
+                "Gửi câu hỏi 🚀", use_container_width=True
+            )
+
+        if send_btn and question.strip():
+            st.session_state.chat_messages.append(
+                {"role": "user", "content": question}
+            )
+            # Limit chat history to last 10 messages (prevent context drift)
+            if len(st.session_state.chat_messages) > 10:
+                st.session_state.chat_messages = st.session_state.chat_messages[-10:]
+            with st.spinner("🤖 AI đang suy nghĩ..."):
+                chat_advisor = CreditAdvisor(
+                    api_key=ai_api_key, model=ai_model
+                )
+                response = chat_advisor.chat(
+                    st.session_state.chat_messages,
+                    result,
+                    st.session_state.scoring_input,
+                    FEATURE_LABELS_VI,
+                )
+            st.session_state.chat_messages.append(
+                {"role": "assistant", "content": response}
+            )
+            st.rerun()
 
 else:
     # ---- Landing page ----
