@@ -1,0 +1,26 @@
+# ============================================================
+# Docker Compose — Credit Scoring App
+# Usage: docker compose up --build
+# ============================================================
+
+services:
+  credit-scoring:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: credit-scoring-app
+    ports:
+      - "8501:8501"
+    environment:
+      # Set your API key here or use .env file
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-deepseek/deepseek-r1-0528:free}
+    env_file:
+      - .env  # Optional: loads from .env if it exists
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3

@@ -1,0 +1,47 @@
+# ============================================================
+# Docker ignore — exclude unnecessary files from image
+# ============================================================
+
+# Git
+.git
+.gitignore
+
+# Virtual environments
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+
+# Notebooks & data (not needed in production)
+notebooks/
+input/
+preprocessed_dataset/
+analysis/
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Env files (secrets injected via Docker ENV)
+.env
+webapp/.env
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Docs
+*.md
+!webapp/README.md
+
+# Old webapp Dockerfile
+webapp/Dockerfile
+
+# Misc
+logs/
+image/
+*.tar.gz
