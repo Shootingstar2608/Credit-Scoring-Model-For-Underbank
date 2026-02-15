@@ -24,6 +24,7 @@ from config import (
     RISK_LEVELS,
     TIERS,
 )
+from auth import authenticate, register, get_all_users, delete_user
 from scoring.advisor import CreditAdvisor
 from scoring.engine import CreditScoringEngine
 
@@ -130,21 +131,134 @@ def load_engine():
     return CreditScoringEngine(MODEL_DIR)
 
 
+# ============================================================
+# AUTH STATE
+# ============================================================
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.user = None
+    st.session_state.auth_page = "login"  # "login" or "register"
+
+
+def do_logout():
+    st.session_state.authenticated = False
+    st.session_state.user = None
+    st.session_state.auth_page = "login"
+    # Clear scoring data
+    for key in ["scoring_result", "scoring_input", "chat_messages"]:
+        st.session_state.pop(key, None)
+
+
+# ============================================================
+# LOGIN / REGISTER PAGE
+# ============================================================
+if not st.session_state.authenticated:
+    st.markdown(
+        """
+    <div class="main-header">
+        <h1>🏦 Credit Scoring — Đánh Giá Tín Dụng</h1>
+        <p>Dành cho khách hàng chưa có lịch sử tín dụng • LightGBM + SHAP Explainability</p>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    # Centered login/register form
+    col_left, col_center, col_right = st.columns([1, 1.5, 1])
+    with col_center:
+        if st.session_state.auth_page == "login":
+            st.markdown("### 🔐 Đăng Nhập")
+            with st.form("login_form"):
+                username = st.text_input("👤 Tên đăng nhập", placeholder="admin")
+                password = st.text_input("🔑 Mật khẩu", type="password", placeholder="••••••")
+                login_btn = st.form_submit_button("Đăng nhập", use_container_width=True)
+
+            if login_btn:
+                if username and password:
+                    user = authenticate(username.strip().lower(), password)
+                    if user:
+                        st.session_state.authenticated = True
+                        st.session_state.user = user
+                        st.rerun()
+                    else:
+                        st.error("❌ Sai tên đăng nhập hoặc mật khẩu.")
+                else:
+                    st.warning("Vui lòng nhập đầy đủ thông tin.")
+
+            st.markdown("---")
+            if st.button("📝 Chưa có tài khoản? Đăng ký", use_container_width=True):
+                st.session_state.auth_page = "register"
+                st.rerun()
+
+
+        else:  # Register page
+            st.markdown("### 📝 Đăng Ký Tài Khoản")
+            with st.form("register_form"):
+                reg_name = st.text_input("Họ tên", placeholder="Nguyễn Văn A")
+                reg_username = st.text_input(
+                    "👤 Tên đăng nhập",
+                    placeholder="nguyenvana",
+                    help="Chỉ chữ và số, ít nhất 3 ký tự",
+                )
+                reg_password = st.text_input(
+                    "🔑 Mật khẩu",
+                    type="password",
+                    placeholder="Ít nhất 6 ký tự",
+                )
+                reg_password2 = st.text_input(
+                    "🔑 Nhập lại mật khẩu", type="password"
+                )
+                reg_btn = st.form_submit_button("Đăng ký", use_container_width=True)
+
+            if reg_btn:
+                if reg_password != reg_password2:
+                    st.error("❌ Mật khẩu nhập lại không khớp.")
+                else:
+                    error = register(reg_username, reg_password, reg_name)
+                    if error:
+                        st.error(f"❌ {error}")
+                    else:
+                        st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
+                        st.session_state.auth_page = "login"
+                        st.rerun()
+
+            st.markdown("---")
+            if st.button("🔐 Đã có tài khoản? Đăng nhập", use_container_width=True):
+                st.session_state.auth_page = "login"
+                st.rerun()
+
+    st.stop()  # Don't render the rest of the app
+
+
+# ============================================================
+# AUTHENTICATED — Main app starts here
+# ============================================================
 engine = load_engine()
 
-
 # ============================================================
-# HEADER
+# HEADER (with user info + logout)
 # ============================================================
-st.markdown(
-    """
-<div class="main-header">
-    <h1>🏦 Credit Scoring — Đánh Giá Tín Dụng</h1>
-    <p>Dành cho khách hàng chưa có lịch sử tín dụng • LightGBM + SHAP Explainability</p>
-</div>
-""",
-    unsafe_allow_html=True,
-)
+hdr_left, hdr_right = st.columns([4, 1])
+with hdr_left:
+    st.markdown(
+        """
+    <div class="main-header">
+        <h1>🏦 Credit Scoring — Đánh Giá Tín Dụng</h1>
+        <p>Dành cho khách hàng chưa có lịch sử tín dụng • LightGBM + SHAP Explainability</p>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+with hdr_right:
+    user = st.session_state.user
+    role_badge = "🔑 Admin" if user["role"] == "admin" else "👤 User"
+    st.markdown(
+        f'<div style="text-align:right; padding:1rem 0;">'
+        f'<strong>{user["name"]}</strong><br>'
+        f'<span style="color:#888;">{role_badge}</span></div>',
+        unsafe_allow_html=True,
+    )
+    st.button("🚪 Đăng xuất", on_click=do_logout, use_container_width=True)
 
 
 # ============================================================
