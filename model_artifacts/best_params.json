@@ -1,0 +1,22 @@
+{
+  "learning_rate": 0.005001307124957796,
+  "max_depth": 10,
+  "num_leaves": 232,
+  "min_child_samples": 304,
+  "min_child_weight": 0.5405308333552789,
+  "subsample": 0.5191700234965356,
+  "colsample_bytree": 0.5956017402971734,
+  "reg_alpha": 0.003961138183145151,
+  "reg_lambda": 4.688616668523281e-06,
+  "min_split_gain": 0.3517683026196915,
+  "max_bin": 343,
+  "subsample_freq": 1,
+  "path_smooth": 8.519904036733767,
+  "n_estimators": 5000,
+  "boosting_type": "gbdt",
+  "random_state": 42,
+  "n_jobs": -1,
+  "verbose": -1,
+  "is_unbalance": true,
+  "best_auc": 0.757618585541223
+}

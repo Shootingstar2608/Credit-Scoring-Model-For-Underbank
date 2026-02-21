@@ -1,30 +1,1277 @@
+# """
+# Credit Scoring Web Application — Streamlit UI
+# Đánh giá tín dụng cho người chưa có lịch sử tín dụng.
+# """
+
+# import os
+# from dotenv import load_dotenv
+# load_dotenv()  # Load .env file (OPENROUTER_API_KEY, AI_MODEL)
+
+# import sys
+# from pathlib import Path
+
+# import numpy as np
+# import plotly.graph_objects as go
+# import streamlit as st
+
+# # Allow imports from webapp root
+# sys.path.insert(0, str(Path(__file__).parent))
+
+# from config import (
+#     FEATURE_LABELS_VI,
+#     IMPROVEMENT_SUGGESTIONS,
+#     MODEL_DIR,
+#     RISK_LEVELS,
+#     TIERS,
+# )
+# from auth import authenticate, register, get_all_users, delete_user
+# from scoring.advisor import CreditAdvisor
+# from scoring.engine import CreditScoringEngine
+
+# # ============================================================
+# # PAGE CONFIG
+# # ============================================================
+# st.set_page_config(
+#     page_title="Credit Scoring — Đánh Giá Tín Dụng",
+#     page_icon="🏦",
+#     layout="wide",
+#     initial_sidebar_state="expanded",
+# )
+
+# # ============================================================
+# # CUSTOM CSS
+# # ============================================================
+# st.markdown(
+#     """
+# <style>
+#     /* Main header */
+#     .main-header {
+#         background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+#         color: white;
+#         padding: 1.5rem 2rem;
+#         border-radius: 12px;
+#         margin-bottom: 1.5rem;
+#         text-align: center;
+#     }
+#     .main-header h1 { color: white; margin: 0; font-size: 1.8rem; }
+#     .main-header p  { color: #bbdefb; margin: 0.3rem 0 0 0; font-size: 0.95rem; }
+
+#     /* Score card */
+#     .score-card {
+#         text-align: center;
+#         padding: 2rem;
+#         border-radius: 12px;
+#         box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+#     }
+#     .score-number {
+#         font-size: 4rem;
+#         font-weight: 800;
+#         line-height: 1.1;
+#     }
+#     .score-label { font-size: 0.9rem; opacity: 0.8; }
+
+#     /* Tier card */
+#     .tier-card {
+#         padding: 1.2rem 1.5rem;
+#         border-radius: 10px;
+#         border-left: 6px solid;
+#         margin-bottom: 0.8rem;
+#     }
+
+#     /* SHAP bar */
+#     .shap-bar-positive { background: #ef5350; border-radius: 4px; height: 18px; }
+#     .shap-bar-negative { background: #66bb6a; border-radius: 4px; height: 18px; }
+
+#     /* Section divider */
+#     .section-title {
+#         font-size: 1.15rem;
+#         font-weight: 700;
+#         color: #1a237e;
+#         border-bottom: 2px solid #e3f2fd;
+#         padding-bottom: 0.4rem;
+#         margin: 1.2rem 0 0.8rem 0;
+#     }
+
+#     /* Suggestion card */
+#     .suggestion-card {
+#         background: #fff8e1;
+#         border-left: 4px solid #ff9800;
+#         padding: 0.8rem 1rem;
+#         border-radius: 0 8px 8px 0;
+#         margin: 0.4rem 0;
+#         font-size: 0.9rem;
+#     }
+
+#     /* Metric box */
+#     .metric-box {
+#         background: #f5f5f5;
+#         border-radius: 8px;
+#         padding: 0.8rem;
+#         text-align: center;
+#     }
+#     .metric-box .value { font-size: 1.4rem; font-weight: 700; }
+#     .metric-box .label { font-size: 0.75rem; color: #757575; }
+
+#     div[data-testid="stForm"] {
+#         border: 1px solid #e0e0e0;
+#         border-radius: 12px;
+#         padding: 1rem !important;
+#     }
+# </style>
+# """,
+#     unsafe_allow_html=True,
+# )
+
+
+# # ============================================================
+# # LOAD ENGINE (cached)
+# # ============================================================
+# @st.cache_resource
+# def load_engine():
+#     return CreditScoringEngine(MODEL_DIR)
+
+
+# # ============================================================
+# # AUTH STATE
+# # ============================================================
+# if "authenticated" not in st.session_state:
+#     st.session_state.authenticated = False
+#     st.session_state.user = None
+#     st.session_state.auth_page = "login"  # "login" or "register"
+
+
+# def do_logout():
+#     st.session_state.authenticated = False
+#     st.session_state.user = None
+#     st.session_state.auth_page = "login"
+#     # Clear scoring data
+#     for key in ["scoring_result", "scoring_input", "chat_messages"]:
+#         st.session_state.pop(key, None)
+
+
+# # ============================================================
+# # LOGIN / REGISTER PAGE
+# # ============================================================
+# if not st.session_state.authenticated:
+#     st.markdown(
+#         """
+#     <div class="main-header">
+#         <h1>🏦 Credit Scoring — Đánh Giá Tín Dụng</h1>
+#         <p>Dành cho khách hàng chưa có lịch sử tín dụng • LightGBM + SHAP • AUC 0.786 (198 features)</p>
+#     </div>
+#     """,
+#         unsafe_allow_html=True,
+#     )
+
+#     # Centered login/register form
+#     col_left, col_center, col_right = st.columns([1, 1.5, 1])
+#     with col_center:
+#         if st.session_state.auth_page == "login":
+#             st.markdown("### 🔐 Đăng Nhập")
+#             with st.form("login_form"):
+#                 username = st.text_input("👤 Tên đăng nhập", placeholder="admin")
+#                 password = st.text_input("🔑 Mật khẩu", type="password", placeholder="••••••")
+#                 login_btn = st.form_submit_button("Đăng nhập", use_container_width=True)
+
+#             if login_btn:
+#                 if username and password:
+#                     user = authenticate(username.strip().lower(), password)
+#                     if user:
+#                         st.session_state.authenticated = True
+#                         st.session_state.user = user
+#                         st.rerun()
+#                     else:
+#                         st.error("❌ Sai tên đăng nhập hoặc mật khẩu.")
+#                 else:
+#                     st.warning("Vui lòng nhập đầy đủ thông tin.")
+
+#             st.markdown("---")
+#             if st.button("📝 Chưa có tài khoản? Đăng ký", use_container_width=True):
+#                 st.session_state.auth_page = "register"
+#                 st.rerun()
+
+
+#         else:  # Register page
+#             st.markdown("### 📝 Đăng Ký Tài Khoản")
+#             with st.form("register_form"):
+#                 reg_name = st.text_input("Họ tên", placeholder="Nguyễn Văn A")
+#                 reg_username = st.text_input(
+#                     "👤 Tên đăng nhập",
+#                     placeholder="nguyenvana",
+#                     help="Chỉ chữ và số, ít nhất 3 ký tự",
+#                 )
+#                 reg_password = st.text_input(
+#                     "🔑 Mật khẩu",
+#                     type="password",
+#                     placeholder="Ít nhất 6 ký tự",
+#                 )
+#                 reg_password2 = st.text_input(
+#                     "🔑 Nhập lại mật khẩu", type="password"
+#                 )
+#                 reg_btn = st.form_submit_button("Đăng ký", use_container_width=True)
+
+#             if reg_btn:
+#                 if reg_password != reg_password2:
+#                     st.error("❌ Mật khẩu nhập lại không khớp.")
+#                 else:
+#                     error = register(reg_username, reg_password, reg_name)
+#                     if error:
+#                         st.error(f"❌ {error}")
+#                     else:
+#                         st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
+#                         st.session_state.auth_page = "login"
+#                         st.rerun()
+
+#             st.markdown("---")
+#             if st.button("🔐 Đã có tài khoản? Đăng nhập", use_container_width=True):
+#                 st.session_state.auth_page = "login"
+#                 st.rerun()
+
+#     st.stop()  # Don't render the rest of the app
+
+
+# # ============================================================
+# # AUTHENTICATED — Main app starts here
+# # ============================================================
+# engine = load_engine()
+
+# # ============================================================
+# # HEADER (with user info + logout)
+# # ============================================================
+# hdr_left, hdr_right = st.columns([4, 1])
+# with hdr_left:
+#     st.markdown(
+#         """
+#     <div class="main-header">
+#         <h1>🏦 Credit Scoring — Đánh Giá Tín Dụng</h1>
+#         <p>Dành cho khách hàng chưa có lịch sử tín dụng • LightGBM + SHAP • AUC 0.786 (198 features)</p>
+#     </div>
+#     """,
+#         unsafe_allow_html=True,
+#     )
+# with hdr_right:
+#     user = st.session_state.user
+#     role_badge = "🔑 Admin" if user["role"] == "admin" else "👤 User"
+#     st.markdown(
+#         f'<div style="text-align:right; padding:1rem 0;">'
+#         f'<strong>{user["name"]}</strong><br>'
+#         f'<span style="color:#888;">{role_badge}</span></div>',
+#         unsafe_allow_html=True,
+#     )
+#     st.button("🚪 Đăng xuất", on_click=do_logout, use_container_width=True)
+
+
+# # ============================================================
+# # SIDEBAR — Form nhập liệu
+# # ============================================================
+# with st.sidebar:
+#     # ---- AI Advisor config (top of sidebar) ----
+#     # with st.expander("🤖 Nhận Xét AI (OpenRouter)", expanded=False):
+#     #     st.caption(
+#     #         "Dùng [OpenRouter](https://openrouter.ai) để truy cập hàng trăm model AI "
+#     #         "(bao gồm model miễn phí). Đăng ký tại openrouter.ai → lấy API key."
+#     #     )
+#     #     ai_api_key = st.text_input(
+#     #         "🔑 OpenRouter API Key",
+#     #         type="password",
+#     #         help="Lấy key tại https://openrouter.ai/keys — Để trống để dùng template tự động (không cần AI).",
+#     #     )
+#     #     ai_model_preset = st.selectbox(
+#     #         "🧠 Model gợi ý",
+#     #         [""] + list(OPENROUTER_MODELS.keys()),
+#     #         format_func=lambda x: (
+#     #             "— Tự nhập bên dưới —" if x == "" else OPENROUTER_MODELS.get(x, x)
+#     #         ),
+#     #         index=1,  # default: first free model
+#     #         help="Chọn model gợi ý hoặc chọn '— Tự nhập —' để điền tên model tùy ý.",
+#     #     )
+#     #     ai_model_custom = st.text_input(
+#     #         "✏️ Hoặc nhập tên model",
+#     #         value="",
+#     #         placeholder="vd: google/gemini-2.0-flash-exp:free",
+#     #         help="Nhập model ID từ openrouter.ai/models. Nếu điền ở đây sẽ ưu tiên hơn dropdown.",
+#     #     )
+#     #     ai_model = (
+#     #         ai_model_custom.strip()
+#     #         if ai_model_custom.strip()
+#     #         else (ai_model_preset or DEFAULT_MODEL)
+#     #     )
+
+#     ai_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+#     ai_model = os.environ.get("AI_MODEL", "deepseek/deepseek-r1-0528:free")
+
+#     st.markdown("---")
+#     st.markdown("### 📝 Thông Tin Đăng Ký Vay")
+#     st.caption("Điền đầy đủ thông tin bên dưới rồi nhấn **Đánh giá**.")
+
+#     with st.form("credit_form"):
+#         # ---- Nhóm 1: Nhân khẩu học ----
+#         st.markdown(
+#             '<p class="section-title">👤 Thông tin cá nhân</p>', unsafe_allow_html=True
+#         )
+#         col1, col2 = st.columns(2)
+#         with col1:
+#             gender = st.selectbox(
+#                 "Giới tính",
+#                 ["M", "F"],
+#                 format_func=lambda x: "Nam" if x == "M" else "Nữ",
+#                 help="Chọn giới tính của bạn",
+#             )
+#             age = st.number_input(
+#                 "Tuổi",
+#                 min_value=18,
+#                 max_value=80,
+#                 value=30,
+#                 step=1,
+#                 help="Tuổi hiện tại. Người lớn tuổi hơn thường có điểm tốt hơn",
+#             )
+#         with col2:
+#             children = st.number_input(
+#                 "Số con",
+#                 min_value=0,
+#                 max_value=20,
+#                 value=0,
+#                 step=1,
+#                 help="Số con đang nuôi dưỡng. Nhiều con = gánh nặng tài chính lớn hơn",
+#             )
+#             family = st.number_input(
+#                 "Thành viên gia đình",
+#                 min_value=1,
+#                 max_value=30,
+#                 value=2,
+#                 step=1,
+#                 help="Tổng số người cùng sống trong hộ (bao gồm bản thân)",
+#             )
+
+#         col_id1, col_id2 = st.columns(2)
+#         with col_id1:
+#             id_publish_years = st.number_input(
+#                 "Đổi CCCD/CMND cách đây (năm)",
+#                 min_value=0,
+#                 max_value=50,
+#                 value=5,
+#                 step=1,
+#                 help="Bạn đổi CCCD/CMND lần cuối cách đây bao lâu? CCCD mới = đáng tin cậy hơn",
+#             )
+#         with col_id2:
+#             registration_years = st.number_input(
+#                 "Đăng ký cư trú cách đây (năm)",
+#                 min_value=0,
+#                 max_value=60,
+#                 value=10,
+#                 step=1,
+#                 help="Thời gian đăng ký cư trú tại địa chỉ hiện tại. Ổn định lâu = điểm tốt hơn",
+#             )
+
+#         education = st.selectbox(
+#             "Trình độ học vấn",
+#             [
+#                 "Lower secondary",
+#                 "Secondary / secondary special",
+#                 "Incomplete higher",
+#                 "Higher education",
+#                 "Academic degree",
+#             ],
+#             index=3,
+#             format_func={
+#                 "Lower secondary": "THCS",
+#                 "Secondary / secondary special": "THPT / Trung cấp",
+#                 "Incomplete higher": "Cao đẳng / ĐH dở dang",
+#                 "Higher education": "Đại học",
+#                 "Academic degree": "Sau đại học",
+#             }.get,
+#             help="Cấp học cao nhất bạn đã hoàn thành",
+#         )
+#         family_status = st.selectbox(
+#             "Tình trạng hôn nhân",
+#             ["Single / not married", "Married", "Civil marriage", "Separated", "Widow"],
+#             index=1,
+#             format_func={
+#                 "Single / not married": "Độc thân",
+#                 "Married": "Đã kết hôn",
+#                 "Civil marriage": "Sống chung",
+#                 "Separated": "Ly thân",
+#                 "Widow": "Góa",
+#             }.get,
+#             help="Tình trạng gia đình hiện tại",
+#         )
+
+#         # ---- Nhóm 2: Tài chính ----
+#         st.markdown(
+#             '<p class="section-title">💰 Thông tin khoản vay</p>',
+#             unsafe_allow_html=True,
+#         )
+#         monthly_income = st.number_input(
+#             "Thu nhập hàng tháng (VNĐ)",
+#             min_value=0,
+#             value=12_000_000,
+#             step=500_000,
+#             help="Lương thực nhận mỗi tháng (trước thuế). VD: 12 triệu/tháng → nhập 12,000,000",
+#         )
+#         credit = st.number_input(
+#             "Số tiền muốn vay (VNĐ)",
+#             min_value=0,
+#             value=300_000_000,
+#             step=10_000_000,
+#             help="Tổng khoản tiền bạn muốn vay. Vay càng lớn so với thu nhập → rủi ro càng cao",
+#         )
+#         annuity = st.number_input(
+#             "Trả góp hàng tháng (VNĐ)",
+#             min_value=0,
+#             value=10_000_000,
+#             step=500_000,
+#             help="Số tiền gốc + lãi phải trả mỗi tháng. VD: Vay 300tr, kỳ hạn 36 tháng → ~10tr/tháng",
+#         )
+#         goods_price = st.number_input(
+#             "Giá trị hàng hóa / mục đích vay (VNĐ)",
+#             min_value=0,
+#             value=280_000_000,
+#             step=10_000_000,
+#             help="Giá thực tế của tài sản bạn mua (nhà, xe, hàng hóa). Nếu vay > giá trị = rủi ro",
+#         )
+#         contract_type = st.selectbox(
+#             "Loại hợp đồng",
+#             ["Cash loans", "Revolving loans"],
+#             format_func=lambda x: (
+#                 "Vay tiền mặt (trả góp cố định)"
+#                 if x == "Cash loans"
+#                 else "Tín dụng tuần hoàn (như thẻ tín dụng)"
+#             ),
+#             help="Vay tiền mặt = vay 1 lần, trả góp đều. Tín dụng tuần hoàn = hạn mức quay vòng",
+#         )
+
+#         # ---- Nhóm 3: Việc làm ----
+#         st.markdown(
+#             '<p class="section-title">💼 Việc làm & Nghề nghiệp</p>',
+#             unsafe_allow_html=True,
+#         )
+#         emp_years = st.number_input(
+#             "Số năm đi làm",
+#             min_value=0.0,
+#             max_value=60.0,
+#             value=5.0,
+#             step=0.5,
+#             help="Thâm niên ở công việc hiện tại. Làm lâu = ổn định = điểm tốt hơn",
+#         )
+#         _income_type_map = {
+#             "Working": "Đi làm (lương)",
+#             "Commercial associate": "Đối tác thương mại",
+#             "Pensioner": "Hưu trí",
+#             "State servant": "Công chức/Viên chức",
+#             "Businessman": "Kinh doanh tự do",
+#             "Student": "Sinh viên",
+#             "Unemployed": "Thất nghiệp",
+#             "Maternity leave": "Nghỉ thai sản",
+#         }
+#         income_type = st.selectbox(
+#             "Loại thu nhập",
+#             list(_income_type_map.keys()),
+#             format_func=_income_type_map.get,
+#             help="Nguồn thu nhập chính của bạn hiện tại",
+#         )
+#         _occupation_map = {
+#             None: "— Bỏ qua —",
+#             "Laborers": "Lao động phổ thông",
+#             "Sales staff": "Nhân viên kinh doanh",
+#             "Core staff": "Nhân viên chính",
+#             "Managers": "Quản lý",
+#             "Drivers": "Tài xế",
+#             "High skill tech staff": "Kỹ thuật cao",
+#             "Accountants": "Kế toán",
+#             "Medicine staff": "Y tế",
+#             "Cooking staff": "Đầu bếp",
+#             "Security staff": "Bảo vệ",
+#             "Cleaning staff": "Vệ sinh",
+#             "Private service staff": "Dịch vụ tư nhân",
+#             "Low-skill Laborers": "Lao động giản đơn",
+#             "Waiters/barmen staff": "Phục vụ",
+#             "Secretaries": "Thư ký",
+#             "Realty agents": "Môi giới BĐS",
+#             "IT staff": "Công nghệ thông tin",
+#             "HR staff": "Nhân sự",
+#         }
+#         occupation = st.selectbox(
+#             "Nghề nghiệp (không bắt buộc)",
+#             list(_occupation_map.keys()),
+#             format_func=_occupation_map.get,
+#             help="Chọn nghề gần nhất với công việc hiện tại. Bỏ qua nếu không muốn khai",
+#         )
+
+#         _org_type_map = {
+#             None: "— Không khai báo —",
+#             "Business Entity Type 3": "Doanh nghiệp tư nhân",
+#             "Self-employed": "Tự kinh doanh",
+#             "Business Entity Type 2": "Công ty TNHH",
+#             "Business Entity Type 1": "Công ty cổ phần",
+#             "Government": "Cơ quan nhà nước",
+#             "Medicine": "Y tế / Bệnh viện",
+#             "School": "Trường học (phổ thông)",
+#             "Kindergarten": "Mẫu giáo / Mầm non",
+#             "University": "Đại học / Cao đẳng",
+#             "Construction": "Xây dựng",
+#             "Military": "Quân đội",
+#             "Police": "Công an",
+#             "Bank": "Ngân hàng",
+#             "Insurance": "Bảo hiểm",
+#             "Agriculture": "Nông nghiệp",
+#             "Restaurant": "Nhà hàng / Ăn uống",
+#             "Hotel": "Khách sạn / Lưu trú",
+#             "Transport: type 4": "Vận tải / Logistics",
+#             "Security": "Bảo vệ / An ninh",
+#             "Telecom": "Viễn thông / CNTT",
+#             "Trade: type 7": "Thương mại / Bán lẻ",
+#             "Industry: type 9": "Công nghiệp / Sản xuất",
+#             "Other": "Khác",
+#         }
+#         organization = st.selectbox(
+#             "Loại tổ chức nơi làm việc",
+#             list(_org_type_map.keys()),
+#             format_func=_org_type_map.get,
+#             help="Loại công ty/tổ chức bạn đang làm việc. Ảnh hưởng đến đánh giá sự ổn định công việc",
+#         )
+
+#         # ---- Nhóm 4: Tài sản ----
+#         st.markdown(
+#             '<p class="section-title">🏠 Tài sản & Nhà ở</p>', unsafe_allow_html=True
+#         )
+#         col3, col4 = st.columns(2)
+#         with col3:
+#             own_car = st.selectbox(
+#                 "Sở hữu ô tô?",
+#                 ["N", "Y"],
+#                 format_func=lambda x: "Có" if x == "Y" else "Không",
+#                 help="Bạn có đang sở hữu ô tô đứng tên không?",
+#             )
+#         with col4:
+#             own_realty = st.selectbox(
+#                 "Sở hữu BĐS?",
+#                 ["N", "Y"],
+#                 format_func=lambda x: "Có" if x == "Y" else "Không",
+#                 index=1,
+#                 help="Bạn có nhà/đất đứng tên không? Có BĐS giúp giảm rủi ro đáng kể",
+#             )
+
+#         car_age = None
+#         if own_car == "Y":
+#             car_age = st.number_input(
+#                 "Tuổi xe (năm)",
+#                 min_value=0,
+#                 max_value=80,
+#                 value=5,
+#                 step=1,
+#                 help="Xe đã sử dụng bao nhiêu năm? Xe mới = giá trị tài sản cao hơn",
+#             )
+
+#         _housing_map = {
+#             "House / apartment": "Nhà riêng / Căn hộ (sở hữu)",
+#             "With parents": "Ở cùng bố mẹ",
+#             "Municipal apartment": "Chung cư nhà nước",
+#             "Rented apartment": "Thuê nhà / phòng trọ",
+#             "Office apartment": "Căn hộ văn phòng",
+#             "Co-op apartment": "Chung cư hợp tác xã",
+#         }
+#         housing = st.selectbox(
+#             "Loại nhà ở",
+#             list(_housing_map.keys()),
+#             format_func=_housing_map.get,
+#             help="Bạn đang ở đâu? Nhà sở hữu được đánh giá tốt hơn nhà thuê",
+#         )
+
+#         # ---- Nhóm 5: Điểm thay thế (External) ----
+#         st.markdown(
+#             '<p class="section-title">📊 Điểm tín dụng thay thế</p>',
+#             unsafe_allow_html=True,
+#         )
+#         st.caption(
+#             "Thang điểm: **0.0** (rất kém) → **1.0** (rất tốt). Để mặc định 0.5 nếu không rõ."
+#         )
+#         ext1 = st.number_input(
+#             "📱 Viễn thông (Viettel, VNPT, Mobi)",
+#             min_value=0.0,
+#             max_value=1.0,
+#             value=0.5,
+#             step=0.05,
+#             key="ext1",
+#             help="Dựa trên: thời gian dùng SIM, tần suất nạp tiền, thanh toán cước đúng hạn. Dùng SIM lâu năm + trả cước đều = điểm cao",
+#         )
+#         ext2 = st.number_input(
+#             "💡 Tiện ích (Điện, Nước, Internet)",
+#             min_value=0.0,
+#             max_value=1.0,
+#             value=0.5,
+#             step=0.05,
+#             key="ext2",
+#             help="Dựa trên: lịch sử thanh toán hóa đơn điện/nước/internet. Trả đúng hạn nhiều tháng liên tục = điểm cao",
+#         )
+#         ext3 = st.number_input(
+#             "🛒 TMĐT (Shopee, Lazada, Tiki)",
+#             min_value=0.0,
+#             max_value=1.0,
+#             value=0.5,
+#             step=0.05,
+#             key="ext3",
+#             help="Dựa trên: tuổi tài khoản, tần suất mua, tỷ lệ hoàn thành đơn, lịch sử 'mua trước trả sau'",
+#         )
+
+#         # ---- Nhóm 6: Liên lạc ----
+#         st.markdown(
+#             '<p class="section-title">📱 Thông tin liên lạc</p>', unsafe_allow_html=True
+#         )
+#         st.caption(
+#             "Tick vào nếu bạn **có thể cung cấp** thông tin liên lạc này. Càng nhiều kênh → càng đáng tin cậy."
+#         )
+#         col8, col9 = st.columns(2)
+#         with col8:
+#             has_emp_phone = st.checkbox(
+#                 "SĐT cơ quan",
+#                 value=True,
+#                 help="SĐT bàn tổng đài của công ty bạn đang làm",
+#             )
+#             has_work_phone = st.checkbox(
+#                 "SĐT nơi làm việc",
+#                 value=False,
+#                 help="SĐT trực tiếp phòng ban / bộ phận của bạn",
+#             )
+#         with col9:
+#             has_phone = st.checkbox(
+#                 "SĐT nhà", value=True, help="Số điện thoại cố định tại nhà riêng"
+#             )
+#             has_email = st.checkbox(
+#                 "Có email", value=True, help="Bạn có email cá nhân đang sử dụng không?"
+#             )
+
+#         phone_change_days = st.number_input(
+#             "Đổi SĐT gần nhất cách đây (ngày)",
+#             min_value=0,
+#             max_value=10000,
+#             value=365,
+#             step=30,
+#             help="Bạn đổi số điện thoại lần cuối cách đây bao nhiêu ngày? Dùng SĐT căng lâu = đáng tin cậy hơn",
+#         )
+
+#         # ---- Nhóm 7: Mạng lưới xã hội ----
+#         st.markdown(
+#             '<p class="section-title">👥 Mạng lưới xã hội</p>', unsafe_allow_html=True
+#         )
+#         st.caption(
+#             "Trong số bạn bè/người thân của bạn, có ai **vỡ nợ/trễ hạn trả nợ** gần đây không?"
+#         )
+#         col_soc1, col_soc2 = st.columns(2)
+#         with col_soc1:
+#             def_30 = st.number_input(
+#                 "Vỡ nợ trong 30 ngày",
+#                 min_value=0,
+#                 max_value=10,
+#                 value=0,
+#                 step=1,
+#                 help="Số người quen bị vỡ nợ/trễ hạn trong 30 ngày gần nhất. 0 = không có ai",
+#             )
+#         with col_soc2:
+#             def_60 = st.number_input(
+#                 "Vỡ nợ trong 60 ngày",
+#                 min_value=0,
+#                 max_value=10,
+#                 value=0,
+#                 step=1,
+#                 help="Số người quen bị vỡ nợ/trễ hạn trong 60 ngày gần nhất. 0 = không có ai",
+#             )
+
+#         # ---- Nhóm 8: Lịch sử tín dụng (từ 6 bảng phụ) ----
+#         st.markdown(
+#             '<p class="section-title">📜 Lịch sử tín dụng</p>',
+#             unsafe_allow_html=True,
+#         )
+#         st.caption(
+#             "Thông tin về các khoản vay trước đây tại **tổ chức khác** (ngân hàng, fintech, v.v.). "
+#             "Để mặc định 0 nếu chưa từng vay."
+#         )
+
+#         col_b1, col_b2 = st.columns(2)
+#         with col_b1:
+#             bureau_loan_count = st.number_input(
+#                 "Số lần vay tại tổ chức khác",
+#                 min_value=0,
+#                 max_value=50,
+#                 value=0,
+#                 step=1,
+#                 help="Tổng số khoản vay bạn đã có tại ngân hàng/tổ chức tín dụng khác (bao gồm đã tất toán)",
+#             )
+#         with col_b2:
+#             bureau_active_count = st.number_input(
+#                 "Số khoản vay đang còn nợ",
+#                 min_value=0,
+#                 max_value=20,
+#                 value=0,
+#                 step=1,
+#                 help="Số khoản vay hiện tại bạn đang trả (chưa tất toán)",
+#             )
+
+#         col_b3, col_b4 = st.columns(2)
+#         with col_b3:
+#             bureau_had_overdue = st.selectbox(
+#                 "Đã từng trả trễ hạn?",
+#                 [0, 1],
+#                 format_func=lambda x: "Có" if x == 1 else "Không",
+#                 help="Bạn có bao giờ trả trễ khoản vay nào tại tổ chức khác không?",
+#             )
+#         with col_b4:
+#             bureau_max_overdue = st.number_input(
+#                 "Quá hạn lâu nhất (ngày)",
+#                 min_value=0,
+#                 max_value=3650,
+#                 value=0,
+#                 step=1,
+#                 help="Số ngày quá hạn nhiều nhất bạn từng bị. 0 = chưa bao giờ quá hạn",
+#             )
+
+#         st.markdown(
+#             '<p class="section-title">📝 Lịch sử đơn vay</p>',
+#             unsafe_allow_html=True,
+#         )
+#         col_p1, col_p2 = st.columns(2)
+#         with col_p1:
+#             prev_app_count = st.number_input(
+#                 "Số lần nộp đơn vay trước",
+#                 min_value=0,
+#                 max_value=50,
+#                 value=0,
+#                 step=1,
+#                 help="Tổng số lần bạn đã nộp đơn vay (kể cả bị từ chối)",
+#             )
+#         with col_p2:
+#             prev_approved_pct = st.slider(
+#                 "Tỷ lệ được duyệt (%)",
+#                 min_value=0,
+#                 max_value=100,
+#                 value=50,
+#                 step=5,
+#                 help="Trong các lần nộp đơn, bao nhiêu % được duyệt? 0% nếu chưa từng nộp đơn",
+#             )
+
+#         st.markdown(
+#             '<p class="section-title">💳 Hành vi trả nợ & Thẻ tín dụng</p>',
+#             unsafe_allow_html=True,
+#         )
+#         install_ontime_pct = st.slider(
+#             "Tỷ lệ trả nợ đúng hạn (%)",
+#             min_value=0,
+#             max_value=100,
+#             value=80,
+#             step=5,
+#             help="Trong các kỳ trả góp trước đây, bạn trả đúng hạn bao nhiêu %? 80% là trung bình",
+#         )
+
+#         col_cc1, col_cc2 = st.columns(2)
+#         with col_cc1:
+#             has_credit_card = st.selectbox(
+#                 "Có thẻ tín dụng?",
+#                 [0, 1],
+#                 format_func=lambda x: "Có" if x == 1 else "Không",
+#                 help="Bạn có đang sử dụng thẻ tín dụng nào không?",
+#             )
+#         with col_cc2:
+#             cc_utilization_pct = st.slider(
+#                 "Tỷ lệ sử dụng thẻ TD (%)",
+#                 min_value=0,
+#                 max_value=100,
+#                 value=30,
+#                 step=5,
+#                 help="Trung bình bạn sử dụng bao nhiêu % hạn mức thẻ? Dưới 30% là tốt",
+#                 disabled=(has_credit_card == 0),
+#             )
+
+#         pos_contract_count = st.number_input(
+#             "Số khoản trả góp POS",
+#             min_value=0,
+#             max_value=30,
+#             value=0,
+#             step=1,
+#             help="Số khoản vay trả góp (mua hàng trả góp tại cửa hàng). 0 nếu chưa có",
+#         )
+
+#         # ---- Submit ----
+#         st.markdown("---")
+#         submitted = st.form_submit_button(
+#             "🔍  Đánh Giá Tín Dụng", use_container_width=True, type="primary"
+#         )
+
+# # ============================================================
+# # BUILD USER INPUT DICT
+# # ============================================================
+# user_input = {
+#     "CODE_GENDER": gender,
+#     "AGE_YEARS": float(age),
+#     "CNT_CHILDREN": int(children),
+#     "CNT_FAM_MEMBERS": float(family),
+#     "NAME_EDUCATION_TYPE": education,
+#     "NAME_FAMILY_STATUS": family_status,
+#     "AMT_INCOME_TOTAL": float(monthly_income) * 12,  # Model cần thu nhập năm
+#     "AMT_CREDIT": float(credit),
+#     "AMT_ANNUITY": float(annuity),
+#     "AMT_GOODS_PRICE": float(goods_price),
+#     "NAME_CONTRACT_TYPE": contract_type,
+#     "EMPLOYMENT_YEARS": float(emp_years),
+#     "NAME_INCOME_TYPE": income_type,
+#     "OCCUPATION_TYPE": occupation,
+#     "FLAG_OWN_CAR": own_car,
+#     "FLAG_OWN_REALTY": own_realty,
+#     "OWN_CAR_AGE": float(car_age) if car_age is not None else np.nan,
+#     "NAME_HOUSING_TYPE": housing,
+#     "EXT_SOURCE_1": float(ext1),
+#     "EXT_SOURCE_2": float(ext2),
+#     "EXT_SOURCE_3": float(ext3),
+#     "FLAG_EMP_PHONE": 1 if has_emp_phone else 0,
+#     "FLAG_WORK_PHONE": 1 if has_work_phone else 0,
+#     "FLAG_PHONE": 1 if has_phone else 0,
+#     "FLAG_EMAIL": 1 if has_email else 0,
+#     "ID_PUBLISH_YEARS": float(id_publish_years),
+#     "REGISTRATION_YEARS": float(registration_years),
+#     "PHONE_CHANGE_DAYS": float(phone_change_days),
+#     "ORGANIZATION_TYPE": organization if organization else "XNA",
+#     "DEF_30_CNT_SOCIAL_CIRCLE": float(def_30),
+#     "DEF_60_CNT_SOCIAL_CIRCLE": float(def_60),
+#     # --- Lịch sử tín dụng (từ 6 bảng phụ) ---
+#     "BUREAU_LOAN_COUNT": float(bureau_loan_count),
+#     "BUREAU_ACTIVE_COUNT": float(bureau_active_count),
+#     "BUREAU_HAD_OVERDUE": float(bureau_had_overdue),
+#     "BUREAU_MAX_OVERDUE": float(bureau_max_overdue),
+#     "BUREAU_CLOSED_RATIO": (
+#         (bureau_loan_count - bureau_active_count) / bureau_loan_count
+#         if bureau_loan_count > 0 else 0.5
+#     ),
+#     "PREV_APP_COUNT": float(prev_app_count),
+#     "PREV_APPROVED_RATIO": float(prev_approved_pct) / 100.0,
+#     "INSTALL_LATE_RATIO": 1.0 - float(install_ontime_pct) / 100.0,
+#     "POS_CONTRACT_COUNT": float(pos_contract_count),
+#     "POS_DPD_MAX": 0.0,  # Tính từ bureau_max_overdue nếu cần
+#     "CC_CARD_COUNT": float(has_credit_card),
+#     "CC_UTILIZATION_MEAN": float(cc_utilization_pct) / 100.0 if has_credit_card else np.nan,
+#     "CC_BALANCE_MEAN": np.nan,  # Không hỏi user → dùng median
+# }
+
+
+# # ============================================================
+# # HELPER: Gauge chart
+# # ============================================================
+# def make_gauge(score: int, tier_color: str) -> go.Figure:
+#     fig = go.Figure(
+#         go.Indicator(
+#             mode="gauge+number",
+#             value=score,
+#             number={"font": {"size": 48, "color": tier_color}},
+#             gauge={
+#                 "axis": {
+#                     "range": [300, 850],
+#                     "tickwidth": 1,
+#                     "tickcolor": "#ccc",
+#                     "tickvals": [300, 400, 500, 580, 670, 740, 800, 850],
+#                 },
+#                 "bar": {"color": tier_color, "thickness": 0.3},
+#                 "bgcolor": "#f5f5f5",
+#                 "steps": [
+#                     {"range": [300, 580], "color": "#ffcdd2"},  # Poor
+#                     {"range": [580, 670], "color": "#fff9c4"},  # Fair
+#                     {"range": [670, 740], "color": "#bbdefb"},  # Good
+#                     {"range": [740, 800], "color": "#c8e6c9"},  # Very Good
+#                     {"range": [800, 850], "color": "#a5d6a7"},  # Exceptional
+#                 ],
+#                 "threshold": {
+#                     "line": {"color": "black", "width": 3},
+#                     "thickness": 0.8,
+#                     "value": score,
+#                 },
+#             },
+#             title={"text": "FICO Score (300 – 850)", "font": {"size": 16}},
+#         )
+#     )
+#     fig.update_layout(height=280, margin=dict(l=30, r=30, t=50, b=10))
+#     return fig
+
+
+# # ============================================================
+# # HELPER: SHAP waterfall chart
+# # ============================================================
+# def make_shap_chart(shap_top: list[dict]) -> go.Figure:
+#     if not shap_top:
+#         return None
+
+#     features = [
+#         FEATURE_LABELS_VI.get(s["feature"], s["feature"]) for s in reversed(shap_top)
+#     ]
+#     values = [s["shap_value"] for s in reversed(shap_top)]
+#     colors = ["#ef5350" if v > 0 else "#66bb6a" for v in values]
+
+#     fig = go.Figure(
+#         go.Bar(
+#             x=values,
+#             y=features,
+#             orientation="h",
+#             marker_color=colors,
+#             text=[f"{v:+.3f}" for v in values],
+#             textposition="outside",
+#             textfont={"size": 11},
+#         )
+#     )
+#     fig.update_layout(
+#         title={"text": "Giải thích kết quả (SHAP)", "font": {"size": 14}},
+#         xaxis_title="Mức ảnh hưởng",
+#         height=max(300, 36 * len(shap_top)),
+#         margin=dict(l=10, r=10, t=40, b=30),
+#         yaxis={"tickfont": {"size": 12}},
+#         plot_bgcolor="white",
+#     )
+#     fig.add_vline(x=0, line_width=1, line_color="grey")
+#     return fig
+
+
+# # ============================================================
+# # MAIN CONTENT — Kết quả
+# # ============================================================
+# if submitted:
+#     with st.spinner("Đang phân tích hồ sơ..."):
+#         result = engine.predict(user_input)
+#     st.session_state.scoring_result = result
+#     st.session_state.scoring_input = dict(user_input)
+#     st.session_state.chat_messages = []  # Reset chat khi đánh giá mới
+
+# if "scoring_result" in st.session_state:
+#     result = st.session_state.scoring_result
+#     score = result["credit_score"]
+#     proba = result["probability"]
+#     risk = RISK_LEVELS[result["risk_key"]]
+
+#     # Determine tier
+#     tier = next(
+#         (t for t in TIERS if t["score_min"] <= score <= t["score_max"]), TIERS[-1]
+#     )
+
+#     # ---- Row 1: Score + Tier ----
+#     col_score, col_tier = st.columns([1, 1.3])
+
+#     with col_score:
+#         fig_gauge = make_gauge(score, tier["color"])
+#         st.plotly_chart(fig_gauge, width="stretch")
+
+#     with col_tier:
+#         st.markdown(
+#             f"""
+# <div class="tier-card" style="background: {tier['color']}15; border-color: {tier['color']};">
+#     <h2 style="margin:0; color: {tier['color']};">{tier['icon']} {tier['name']}</h2>
+#     <p style="margin: 0.5rem 0 0; font-size: 1rem;">{tier['description']}</p>
+# </div>
+# """,
+#             unsafe_allow_html=True,
+#         )
+
+#         # KPI metrics
+#         m1, m2, m3 = st.columns(3)
+#         with m1:
+#             st.markdown(
+#                 f'<div class="metric-box"><div class="value" style="color: {tier["color"]};">{score}</div><div class="label">FICO Score</div></div>',
+#                 unsafe_allow_html=True,
+#             )
+#         with m2:
+#             st.markdown(
+#                 f'<div class="metric-box"><div class="value" style="color: {risk["color"]};">{proba:.1%}</div><div class="label">Xác suất vỡ nợ</div></div>',
+#                 unsafe_allow_html=True,
+#             )
+#         with m3:
+#             cl = result["credit_limit"]
+#             cl_text = f"{cl:,.0f}" if cl > 0 else "N/A"
+#             st.markdown(
+#                 f'<div class="metric-box"><div class="value">{cl_text}</div><div class="label">Hạn mức đề xuất</div></div>',
+#                 unsafe_allow_html=True,
+#             )
+
+#     st.markdown("---")
+
+#     # ---- Row 2: SHAP explanation + Suggestions ----
+#     col_shap, col_suggest = st.columns([1.4, 1])
+
+#     with col_shap:
+#         st.markdown(
+#             '<p class="section-title">🔬 Giải Thích Kết Quả (SHAP)</p>',
+#             unsafe_allow_html=True,
+#         )
+#         fig_shap = make_shap_chart(result["shap_top_features"])
+#         if fig_shap:
+#             st.plotly_chart(fig_shap, width="stretch")
+#             st.caption(
+#                 "🔴 **Đỏ** = tăng rủi ro vỡ nợ &nbsp;|&nbsp; 🟢 **Xanh** = giảm rủi ro vỡ nợ. "
+#                 "Thanh càng dài → ảnh hưởng càng lớn."
+#             )
+#         else:
+#             st.info("SHAP explainer chưa sẵn sàng.")
+
+#     with col_suggest:
+#         st.markdown(
+#             '<p class="section-title">💡 Đề Xuất Cải Thiện</p>', unsafe_allow_html=True
+#         )
+
+#         # Generate suggestions based on SHAP
+#         shown = set()
+#         for item in result.get("shap_top_features", []):
+#             if item["direction"] != "risk":
+#                 continue
+#             feat = item["feature"]
+#             # Map feature → suggestion category
+#             if feat in (
+#                 "CREDIT_INCOME_RATIO",
+#                 "ANNUITY_INCOME_RATIO",
+#                 "AMT_INCOME_TOTAL",
+#                 "INCOME_PER_PERSON",
+#             ):
+#                 key = "income"
+#             elif feat in ("EMPLOYMENT_YEARS", "EMPLOYED_TO_AGE_RATIO", "DAYS_EMPLOYED"):
+#                 key = "employment"
+#             elif feat in (
+#                 "AMT_CREDIT",
+#                 "CREDIT_TERM_MONTHS",
+#                 "AMT_ANNUITY",
+#                 "PAYMENT_RATE",
+#                 "GOODS_CREDIT_RATIO",
+#             ):
+#                 key = "credit_amount"
+#             elif feat in ("FLAG_OWN_CAR", "FLAG_OWN_REALTY", "OWN_CAR_AGE"):
+#                 key = "assets"
+#             elif feat in (
+#                 "CONTACT_COUNT",
+#                 "FLAG_EMP_PHONE",
+#                 "FLAG_WORK_PHONE",
+#                 "FLAG_PHONE",
+#                 "FLAG_EMAIL",
+#             ):
+#                 key = "contact"
+#             elif feat.startswith("EXT_SOURCE"):
+#                 key = "ext_source"
+#             elif feat in (
+#                 "SOCIAL_DEF_TOTAL",
+#                 "SOCIAL_CIRCLE_DEFAULT",
+#                 "DEF_30_CNT_SOCIAL_CIRCLE",
+#                 "DEF_60_CNT_SOCIAL_CIRCLE",
+#             ):
+#                 key = "social"
+#             elif feat.startswith("BUREAU_") or feat in (
+#                 "BUREAU_DEBT_INCOME_RATIO", "BUREAU_CREDIT_VS_CURRENT",
+#                 "TOTAL_LOAN_COUNT",
+#             ):
+#                 key = "bureau"
+#             elif feat.startswith("PREV_") or feat == "PREV_ANNUITY_VS_CURRENT":
+#                 key = "prev_app"
+#             elif feat.startswith("INSTALL_") or feat == "GOOD_PAYMENT_SCORE":
+#                 key = "installment"
+#             elif feat.startswith("CC_"):
+#                 key = "credit_card"
+#             elif feat.startswith("POS_"):
+#                 key = "installment"
+#             else:
+#                 continue
+
+#             if key not in shown:
+#                 shown.add(key)
+#                 st.markdown(
+#                     f'<div class="suggestion-card">💡 {IMPROVEMENT_SUGGESTIONS[key]}</div>',
+#                     unsafe_allow_html=True,
+#                 )
+
+#         if not shown:
+#             st.success("Hồ sơ của bạn rất tốt! Không cần cải thiện thêm. 🎉")
+
+#         # Decision details
+#         st.markdown(
+#             '<p class="section-title">📋 Chi Tiết Quyết Định</p>',
+#             unsafe_allow_html=True,
+#         )
+#         decision_data = {
+#             "FICO Score": f"{score}/850",
+#             "Xác suất vỡ nợ": f"{proba:.2%}",
+#             "Mức rủi ro": f"{risk['emoji']} {risk['label']}",
+#             "Quyết định": f"{tier['icon']} {tier['name']}",
+#             "Hạn mức đề xuất": (
+#                 f"{result['credit_limit']:,.0f}"
+#                 if result["credit_limit"] > 0
+#                 else "Không cấp"
+#             ),
+#         }
+#         if tier["interest_modifier"] is not None:
+#             base_rate = 12.0  # Base interest rate %
+#             adjusted = base_rate + tier["interest_modifier"] * 100
+#             decision_data["Lãi suất dự kiến"] = f"{adjusted:.1f}%/năm"
+
+#         for k, v in decision_data.items():
+#             st.markdown(f"**{k}:** {v}")
+
+#     # ---- Row 3: Template Assessment (ALWAYS shown) ----
+#     st.markdown("---")
+#     st.markdown(
+#         '<p class="section-title">📋 Nhận Xét Tín Dụng</p>',
+#         unsafe_allow_html=True,
+#     )
+#     template_advisor = CreditAdvisor()  # No API key → always template
+#     template_result = template_advisor.assess(
+#         result, st.session_state.scoring_input, FEATURE_LABELS_VI
+#     )
+#     st.markdown(template_result.text)
+
+#     # ---- Row 4: Tiered System Legend ----
+#     st.markdown("---")
+#     st.markdown(
+#         '<p class="section-title">📊 Hệ Thống Xếp Hạng Tín Dụng</p>',
+#         unsafe_allow_html=True,
+#     )
+#     tier_cols = st.columns(len(TIERS))
+#     for i, t in enumerate(TIERS):
+#         with tier_cols[i]:
+#             is_current = t["name"] == tier["name"]
+#             border = f"3px solid {t['color']}" if is_current else "1px solid #e0e0e0"
+#             bg = f"{t['color']}18" if is_current else "#fafafa"
+#             st.markdown(
+#                 f"""
+# <div style="border: {border}; background: {bg}; border-radius: 10px; padding: 0.8rem; text-align: center; min-height: 130px;">
+#     <div style="font-size: 1.8rem;">{t['icon']}</div>
+#     <div style="font-weight: 700; color: {t['color']}; font-size: 0.85rem;">{t['name']}</div>
+#     <div style="font-size: 0.75rem; color: #757575; margin-top: 0.3rem;">{t['score_min']}–{t['score_max']} điểm</div>
+#     {'<div style="margin-top:0.3rem; font-size:0.7rem; font-weight:600; color:' + t["color"] + ';">◄ BẠN Ở ĐÂY</div>' if is_current else ''}
+# </div>
+# """,
+#                 unsafe_allow_html=True,
+#             )
+
+#     # ---- Row 5: AI Chatbot ----
+#     st.markdown("---")
+#     st.markdown(
+#         '<p class="section-title">🤖 Hỏi Tư Vấn Viên AI</p>',
+#         unsafe_allow_html=True,
+#     )
+#     st.caption(
+#         "Hỏi bất kỳ câu hỏi nào về hồ sơ tín dụng — "
+#         "AI sẽ tư vấn dựa trên kết quả vừa chấm điểm."
+#     )
+#     st.warning(
+#         "⚠️ **Lưu ý:** AI có thể mắc sai sót. Mọi câu trả lời chỉ mang tính "
+#         "tham khảo, không phải cam kết từ ngân hàng. Luôn kiểm chứng thông tin "
+#         "quan trọng với chuyên viên tư vấn.",
+#         icon="⚠️",
+#     )
+
+#     if not ai_api_key:
+#         st.info(
+#             "💡 Tính năng tư vấn AI chưa được kích hoạt. "
+#             "Vui lòng cấu hình OPENROUTER_API_KEY trong file .env."
+#         )
+#     else:
+#         # Display chat history
+#         for msg in st.session_state.get("chat_messages", []):
+#             avatar = "👤" if msg["role"] == "user" else "🤖"
+#             with st.chat_message(msg["role"], avatar=avatar):
+#                 st.markdown(msg["content"])
+
+#         # Chat input form
+#         with st.form("chat_form", clear_on_submit=True):
+#             question = st.text_input(
+#                 "Câu hỏi",
+#                 placeholder="VD: Làm sao để tăng điểm tín dụng của tôi?",
+#                 label_visibility="collapsed",
+#             )
+#             send_btn = st.form_submit_button(
+#                 "Gửi câu hỏi 🚀", use_container_width=True
+#             )
+
+#         if send_btn and question.strip():
+#             st.session_state.chat_messages.append(
+#                 {"role": "user", "content": question}
+#             )
+#             # Limit chat history to last 10 messages (prevent context drift)
+#             if len(st.session_state.chat_messages) > 10:
+#                 st.session_state.chat_messages = st.session_state.chat_messages[-10:]
+#             with st.spinner("🤖 AI đang suy nghĩ..."):
+#                 chat_advisor = CreditAdvisor(
+#                     api_key=ai_api_key, model=ai_model
+#                 )
+#                 response = chat_advisor.chat(
+#                     st.session_state.chat_messages,
+#                     result,
+#                     st.session_state.scoring_input,
+#                     FEATURE_LABELS_VI,
+#                 )
+#             st.session_state.chat_messages.append(
+#                 {"role": "assistant", "content": response}
+#             )
+#             st.rerun()
+
+# else:
+#     # ---- Landing page ----
+#     st.markdown(
+#         """
+# ### 👈 Điền thông tin ở thanh bên trái để bắt đầu
+
+# Ứng dụng sẽ đánh giá hồ sơ tín dụng của bạn dựa trên:
+
+# | Nhóm | Thông tin |
+# |------|----------|
+# | 👤 **Cá nhân** | Tuổi, giới tính, học vấn, tình trạng hôn nhân |
+# | 💰 **Tài chính** | Thu nhập, số tiền vay, kỳ hạn |
+# | 💼 **Việc làm** | Nghề nghiệp, thâm niên |
+# | 🏠 **Tài sản** | Nhà ở, xe cộ |
+# | 📊 **Điểm thay thế** | Viễn thông, tiện ích (điện/nước), thương mại điện tử |
+# | 📱 **Liên lạc** | Kênh liên lạc có sẵn |
+# | 📜 **Lịch sử tín dụng** | Khoản vay cũ, quá hạn, lịch sử đơn vay |
+# | 💳 **Hành vi trả nợ** | Tỷ lệ đúng hạn, thẻ tín dụng, trả góp POS |
+
+# **Kết quả bao gồm:**
+# - 📈 **FICO Score** (300-850)
+# - 🎯 **Xác suất vỡ nợ** (đã hiệu chỉnh)
+# - 🔬 **Giải thích SHAP** cho từng yếu tố
+# - 💡 **Đề xuất cải thiện** cụ thể
+# - 💳 **Hạn mức tín dụng đề xuất** (VNĐ)
+# """
+#     )
+
+# # ============================================================
+# # FOOTER
+# # ============================================================
+# st.markdown("---")
+# st.markdown(
+#     """
+# <div style="text-align: center; color: #9e9e9e; font-size: 0.8rem; padding: 0.5rem;">
+#     Credit Scoring Demo • LightGBM + SHAP • Model AUC: 0.786 • 198 features (7 tables)<br>
+#     Kết hợp hồ sơ đăng ký + lịch sử tín dụng từ 6 bảng phụ
+# </div>
+# """,
+#     unsafe_allow_html=True,
+# )
+
+
 """
-Credit Scoring Web Application — Streamlit UI
-Đánh giá tín dụng cho người chưa có lịch sử tín dụng.
+Credit Scoring Web App — Phiên bản tối ưu (Streamlit)
+- Form sidebar theo expanders, dễ quét
+- Kết quả theo tabs: Kết quả | SHAP | Nhận xét | Hỏi AI
+- Nút Chỉnh sửa hồ sơ, format VNĐ, glossary, footer không hardcode
 """
 
 import os
-from dotenv import load_dotenv
-load_dotenv()  # Load .env file (OPENROUTER_API_KEY, AI_MODEL)
-
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
+load_dotenv()
 
 import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-# Allow imports from webapp root
-sys.path.insert(0, str(Path(__file__).parent))
+WEBAPP_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(WEBAPP_DIR))
+MODEL_DIR_OVERRIDE = WEBAPP_DIR.parent / "model_artifacts"
 
 from config import (
     FEATURE_LABELS_VI,
     IMPROVEMENT_SUGGESTIONS,
-    MODEL_DIR,
     RISK_LEVELS,
     TIERS,
 )
-from auth import authenticate, register, get_all_users, delete_user
+from auth import authenticate, register
+from pdf_report import build_credit_report_pdf
 from scoring.advisor import CreditAdvisor
 from scoring.engine import CreditScoringEngine
 
@@ -41,650 +1288,500 @@ st.set_page_config(
 # ============================================================
 # CUSTOM CSS
 # ============================================================
-st.markdown(
-    """
+st.markdown("""
 <style>
-    /* Main header */
     .main-header {
         background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
         color: white;
-        padding: 1.5rem 2rem;
+        padding: 1rem 1.5rem;
         border-radius: 12px;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
         text-align: center;
     }
-    .main-header h1 { color: white; margin: 0; font-size: 1.8rem; }
-    .main-header p  { color: #bbdefb; margin: 0.3rem 0 0 0; font-size: 0.95rem; }
-
-    /* Score card */
-    .score-card {
-        text-align: center;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    }
-    .score-number {
-        font-size: 4rem;
-        font-weight: 800;
-        line-height: 1.1;
-    }
-    .score-label { font-size: 0.9rem; opacity: 0.8; }
-
-    /* Tier card */
-    .tier-card {
-        padding: 1.2rem 1.5rem;
-        border-radius: 10px;
-        border-left: 6px solid;
-        margin-bottom: 0.8rem;
-    }
-
-    /* SHAP bar */
-    .shap-bar-positive { background: #ef5350; border-radius: 4px; height: 18px; }
-    .shap-bar-negative { background: #66bb6a; border-radius: 4px; height: 18px; }
-
-    /* Section divider */
+    .main-header h1 { color: white; margin: 0; font-size: 1.6rem; }
+    .main-header p { color: #bbdefb; margin: 0.25rem 0 0 0; font-size: 0.9rem; }
     .section-title {
-        font-size: 1.15rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: #1a237e;
         border-bottom: 2px solid #e3f2fd;
-        padding-bottom: 0.4rem;
-        margin: 1.2rem 0 0.8rem 0;
+        padding-bottom: 0.35rem;
+        margin: 0.8rem 0 0.5rem 0;
     }
-
-    /* Suggestion card */
-    .suggestion-card {
-        background: #fff8e1;
-        border-left: 4px solid #ff9800;
-        padding: 0.8rem 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 0.4rem 0;
-        font-size: 0.9rem;
+    .tier-card {
+        padding: 1rem 1.2rem;
+        border-radius: 10px;
+        border-left: 6px solid;
+        margin-bottom: 0.6rem;
     }
-
-    /* Metric box */
     .metric-box {
         background: #f5f5f5;
         border-radius: 8px;
-        padding: 0.8rem;
+        padding: 0.6rem;
         text-align: center;
     }
-    .metric-box .value { font-size: 1.4rem; font-weight: 700; }
+    .metric-box .value { font-size: 1.3rem; font-weight: 700; }
     .metric-box .label { font-size: 0.75rem; color: #757575; }
-
-    div[data-testid="stForm"] {
-        border: 1px solid #e0e0e0;
-        border-radius: 12px;
-        padding: 1rem !important;
+    .suggestion-card {
+        background: #fff8e1;
+        border-left: 4px solid #ff9800;
+        padding: 0.6rem 0.8rem;
+        border-radius: 0 8px 8px 0;
+        margin: 0.35rem 0;
+        font-size: 0.9rem;
     }
+    .glossary-item { margin: 0.25rem 0; font-size: 0.9rem; }
+    div[data-testid="stForm"] { border: 1px solid #e0e0e0; border-radius: 12px; padding: 1rem !important; }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 
-# ============================================================
-# LOAD ENGINE (cached)
-# ============================================================
+def format_vnd(x: float) -> str:
+    """Format số tiền VNĐ: 12_000_000 -> '12 triệu' hoặc '12.5 tr'."""
+    if x <= 0 or np.isnan(x):
+        return "0"
+    if x >= 1e9:
+        return f"{x/1e9:.1f} tỷ"
+    if x >= 1e6:
+        return f"{x/1e6:.0f} triệu" if x % 1e6 == 0 else f"{x/1e6:.1f} triệu"
+    if x >= 1e3:
+        return f"{x/1e3:.0f} nghìn"
+    return f"{x:,.0f}"
+
+
 @st.cache_resource
 def load_engine():
-    return CreditScoringEngine(MODEL_DIR)
+    model_dir = str(MODEL_DIR_OVERRIDE) if MODEL_DIR_OVERRIDE.exists() else None
+    if model_dir is None:
+        from config import MODEL_DIR
+        model_dir = str(Path(MODEL_DIR).resolve() if not Path(MODEL_DIR).is_absolute() else MODEL_DIR)
+    return CreditScoringEngine(model_dir)
 
 
 # ============================================================
-# AUTH STATE
+# AUTH
 # ============================================================
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.user = None
-    st.session_state.auth_page = "login"  # "login" or "register"
+    st.session_state.auth_page = "login"
+if "report_pdf_bytes" not in st.session_state:
+    st.session_state.report_pdf_bytes = None
+if "report_pdf_valid" not in st.session_state:
+    st.session_state.report_pdf_valid = False
+if "report_pdf_meta" not in st.session_state:
+    st.session_state.report_pdf_meta = {}
+if "report_pdf_signature" not in st.session_state:
+    st.session_state.report_pdf_signature = ""
 
 
 def do_logout():
     st.session_state.authenticated = False
     st.session_state.user = None
     st.session_state.auth_page = "login"
-    # Clear scoring data
-    for key in ["scoring_result", "scoring_input", "chat_messages"]:
+    for key in [
+        "scoring_result",
+        "scoring_input",
+        "chat_messages",
+        "report_pdf_bytes",
+        "report_pdf_valid",
+        "report_pdf_meta",
+        "report_pdf_signature",
+    ]:
         st.session_state.pop(key, None)
 
 
-# ============================================================
-# LOGIN / REGISTER PAGE
-# ============================================================
 if not st.session_state.authenticated:
-    st.markdown(
-        """
+    st.markdown("""
     <div class="main-header">
         <h1>🏦 Credit Scoring — Đánh Giá Tín Dụng</h1>
-        <p>Dành cho khách hàng chưa có lịch sử tín dụng • LightGBM + SHAP Explainability</p>
+        <p>Dành cho khách hàng chưa có lịch sử tín dụng • Mô hình ML + SHAP</p>
     </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-    # Centered login/register form
+    """, unsafe_allow_html=True)
     col_left, col_center, col_right = st.columns([1, 1.5, 1])
     with col_center:
         if st.session_state.auth_page == "login":
-            st.markdown("### 🔐 Đăng Nhập")
+            st.markdown("### 🔐 Đăng nhập")
             with st.form("login_form"):
-                username = st.text_input("👤 Tên đăng nhập", placeholder="admin")
-                password = st.text_input("🔑 Mật khẩu", type="password", placeholder="••••••")
-                login_btn = st.form_submit_button("Đăng nhập", use_container_width=True)
-
-            if login_btn:
-                if username and password:
-                    user = authenticate(username.strip().lower(), password)
-                    if user:
-                        st.session_state.authenticated = True
-                        st.session_state.user = user
-                        st.rerun()
+                username = st.text_input("Tên đăng nhập", placeholder="admin")
+                password = st.text_input("Mật khẩu", type="password", placeholder="••••••")
+                if st.form_submit_button("Đăng nhập", width="stretch"):
+                    if username and password:
+                        user = authenticate(username.strip().lower(), password)
+                        if user:
+                            st.session_state.authenticated = True
+                            st.session_state.user = user
+                            st.rerun()
+                        else:
+                            st.error("Sai tên đăng nhập hoặc mật khẩu.")
                     else:
-                        st.error("❌ Sai tên đăng nhập hoặc mật khẩu.")
-                else:
-                    st.warning("Vui lòng nhập đầy đủ thông tin.")
-
-            st.markdown("---")
-            if st.button("📝 Chưa có tài khoản? Đăng ký", use_container_width=True):
+                        st.warning("Vui lòng nhập đầy đủ.")
+            if st.button("📝 Chưa có tài khoản? Đăng ký", width="stretch"):
                 st.session_state.auth_page = "register"
                 st.rerun()
-
-
-        else:  # Register page
-            st.markdown("### 📝 Đăng Ký Tài Khoản")
+        else:
+            st.markdown("### 📝 Đăng ký")
             with st.form("register_form"):
                 reg_name = st.text_input("Họ tên", placeholder="Nguyễn Văn A")
-                reg_username = st.text_input(
-                    "👤 Tên đăng nhập",
-                    placeholder="nguyenvana",
-                    help="Chỉ chữ và số, ít nhất 3 ký tự",
-                )
-                reg_password = st.text_input(
-                    "🔑 Mật khẩu",
-                    type="password",
-                    placeholder="Ít nhất 6 ký tự",
-                )
-                reg_password2 = st.text_input(
-                    "🔑 Nhập lại mật khẩu", type="password"
-                )
-                reg_btn = st.form_submit_button("Đăng ký", use_container_width=True)
-
-            if reg_btn:
-                if reg_password != reg_password2:
-                    st.error("❌ Mật khẩu nhập lại không khớp.")
-                else:
-                    error = register(reg_username, reg_password, reg_name)
-                    if error:
-                        st.error(f"❌ {error}")
+                reg_username = st.text_input("Tên đăng nhập", placeholder="nguyenvana", help="Chữ và số, ≥3 ký tự")
+                reg_password = st.text_input("Mật khẩu", type="password", placeholder="≥6 ký tự")
+                reg_password2 = st.text_input("Nhập lại mật khẩu", type="password")
+                if st.form_submit_button("Đăng ký", width="stretch"):
+                    if reg_password != reg_password2:
+                        st.error("Mật khẩu nhập lại không khớp.")
                     else:
-                        st.success("✅ Đăng ký thành công! Hãy đăng nhập.")
-                        st.session_state.auth_page = "login"
-                        st.rerun()
-
-            st.markdown("---")
-            if st.button("🔐 Đã có tài khoản? Đăng nhập", use_container_width=True):
+                        err = register(reg_username, reg_password, reg_name)
+                        if err:
+                            st.error(err)
+                        else:
+                            st.success("Đăng ký thành công. Hãy đăng nhập.")
+                            st.session_state.auth_page = "login"
+                            st.rerun()
+            if st.button("🔐 Đã có tài khoản? Đăng nhập", width="stretch"):
                 st.session_state.auth_page = "login"
                 st.rerun()
-
-    st.stop()  # Don't render the rest of the app
+    st.stop()
 
 
 # ============================================================
-# AUTHENTICATED — Main app starts here
+# HEADER (sau khi đăng nhập)
 # ============================================================
 engine = load_engine()
+ai_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+ai_model = os.environ.get("AI_MODEL", "deepseek/deepseek-r1-0528:free")
 
-# ============================================================
-# HEADER (with user info + logout)
-# ============================================================
 hdr_left, hdr_right = st.columns([4, 1])
 with hdr_left:
-    st.markdown(
-        """
+    st.markdown("""
     <div class="main-header">
         <h1>🏦 Credit Scoring — Đánh Giá Tín Dụng</h1>
-        <p>Dành cho khách hàng chưa có lịch sử tín dụng • LightGBM + SHAP Explainability</p>
+        <p>Dành cho khách hàng chưa có lịch sử tín dụng • Mô hình ML + SHAP</p>
     </div>
-    """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 with hdr_right:
     user = st.session_state.user
     role_badge = "🔑 Admin" if user["role"] == "admin" else "👤 User"
     st.markdown(
-        f'<div style="text-align:right; padding:1rem 0;">'
-        f'<strong>{user["name"]}</strong><br>'
-        f'<span style="color:#888;">{role_badge}</span></div>',
+        f'<div style="text-align:right; padding:0.5rem 0;"><strong>{user["name"]}</strong><br><span style="color:#888;">{role_badge}</span></div>',
         unsafe_allow_html=True,
     )
-    st.button("🚪 Đăng xuất", on_click=do_logout, use_container_width=True)
+    st.button("🚪 Đăng xuất", on_click=do_logout, width="stretch")
 
 
 # ============================================================
-# SIDEBAR — Form nhập liệu
+# FORM: Main (khi chưa có kết quả) hoặc Sidebar (khi đã có kết quả)
+# Chưa có kết quả → form nằm MAIN (rộng). Có kết quả → form nằm SIDEBAR (để chỉnh & đánh giá lại).
 # ============================================================
-with st.sidebar:
-    # ---- AI Advisor config (top of sidebar) ----
-    # with st.expander("🤖 Nhận Xét AI (OpenRouter)", expanded=False):
-    #     st.caption(
-    #         "Dùng [OpenRouter](https://openrouter.ai) để truy cập hàng trăm model AI "
-    #         "(bao gồm model miễn phí). Đăng ký tại openrouter.ai → lấy API key."
-    #     )
-    #     ai_api_key = st.text_input(
-    #         "🔑 OpenRouter API Key",
-    #         type="password",
-    #         help="Lấy key tại https://openrouter.ai/keys — Để trống để dùng template tự động (không cần AI).",
-    #     )
-    #     ai_model_preset = st.selectbox(
-    #         "🧠 Model gợi ý",
-    #         [""] + list(OPENROUTER_MODELS.keys()),
-    #         format_func=lambda x: (
-    #             "— Tự nhập bên dưới —" if x == "" else OPENROUTER_MODELS.get(x, x)
-    #         ),
-    #         index=1,  # default: first free model
-    #         help="Chọn model gợi ý hoặc chọn '— Tự nhập —' để điền tên model tùy ý.",
-    #     )
-    #     ai_model_custom = st.text_input(
-    #         "✏️ Hoặc nhập tên model",
-    #         value="",
-    #         placeholder="vd: google/gemini-2.0-flash-exp:free",
-    #         help="Nhập model ID từ openrouter.ai/models. Nếu điền ở đây sẽ ưu tiên hơn dropdown.",
-    #     )
-    #     ai_model = (
-    #         ai_model_custom.strip()
-    #         if ai_model_custom.strip()
-    #         else (ai_model_preset or DEFAULT_MODEL)
-    #     )
+_has_result = "scoring_result" in st.session_state
+# st là module không dùng được với "with" → dùng st.container() cho main, st.sidebar cho sidebar
+_form_place = st.sidebar if _has_result else st.container()
 
-    ai_api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    ai_model = os.environ.get("AI_MODEL", "deepseek/deepseek-r1-0528:free")
+if not _has_result:
+    with st.sidebar:
+        st.markdown("### 🏦 Credit Scoring")
+        st.caption("Form điền bên **phải** (vùng rộng). Điền xong nhấn **Đánh giá tín dụng**.")
+        st.markdown(
+            """
+### Hướng dẫn điền hồ sơ
 
-    st.markdown("---")
-    st.markdown("### 📝 Thông Tin Đăng Ký Vay")
-    st.caption("Điền đầy đủ thông tin bên dưới rồi nhấn **Đánh giá**.")
+Ứng dụng sẽ đánh giá hồ sơ tín dụng của bạn dựa trên:
+
+| Nhóm | Thông tin |
+|------|----------|
+| 👤 **Cá nhân** | Tuổi, giới tính, học vấn, tình trạng hôn nhân |
+| 💰 **Tài chính** | Thu nhập, số tiền vay, kỳ hạn |
+| 💼 **Việc làm** | Nghề nghiệp, thâm niên |
+| 🏠 **Tài sản** | Nhà ở, xe cộ |
+| 📊 **Điểm thay thế** | Viễn thông, tiện ích (điện/nước), thương mại điện tử |
+| 📱 **Liên lạc** | Kênh liên lạc có sẵn |
+
+**Kết quả bao gồm:**
+- 📈 **FICO Score** (300-850)
+- 🎯 **Xác suất vỡ nợ** (đã hiệu chỉnh)
+- 🔬 **Giải thích SHAP** cho từng yếu tố
+- 💡 **Đề xuất cải thiện** cụ thể
+- 💳 **Hạn mức tín dụng đề xuất** (VNĐ)
+"""
+        )
+        with st.expander("📖 Giải thích thuật ngữ"):
+            st.markdown("- **FICO (300–850):** Thang điểm tín dụng. Càng cao càng dễ duyệt vay.")
+            st.markdown("- **SHAP:** Đo ảnh hưởng từng yếu tố. Đỏ = tăng rủi ro, xanh = giảm rủi ro.")
+            st.markdown("- **Điểm thay thế:** Từ viễn thông, hóa đơn điện nước, TMĐT khi chưa có lịch sử vay.")
+
+with _form_place:
+    if _has_result:
+        st.markdown("### ✏️ Chỉnh hồ sơ & đánh giá lại")
+        st.caption("Sửa bên dưới rồi nhấn **Đánh giá tín dụng**.")
+    else:
+        st.markdown("### 📝 Hồ sơ đăng ký vay")
+        st.caption("Điền đầy đủ các nhóm dưới đây rồi nhấn **Đánh giá tín dụng** ở cuối.")
 
     with st.form("credit_form"):
-        # ---- Nhóm 1: Nhân khẩu học ----
-        st.markdown(
-            '<p class="section-title">👤 Thông tin cá nhân</p>', unsafe_allow_html=True
-        )
-        col1, col2 = st.columns(2)
-        with col1:
-            gender = st.selectbox(
-                "Giới tính",
-                ["M", "F"],
-                format_func=lambda x: "Nam" if x == "M" else "Nữ",
-                help="Chọn giới tính của bạn",
-            )
-            age = st.number_input(
-                "Tuổi",
-                min_value=18,
-                max_value=80,
-                value=30,
-                step=1,
-                help="Tuổi hiện tại. Người lớn tuổi hơn thường có điểm tốt hơn",
-            )
-        with col2:
-            children = st.number_input(
-                "Số con",
-                min_value=0,
-                max_value=20,
-                value=0,
-                step=1,
-                help="Số con đang nuôi dưỡng. Nhiều con = gánh nặng tài chính lớn hơn",
-            )
-            family = st.number_input(
-                "Thành viên gia đình",
-                min_value=1,
-                max_value=30,
-                value=2,
-                step=1,
-                help="Tổng số người cùng sống trong hộ (bao gồm bản thân)",
-            )
+        # Khi form ở main: 2 cột (Cá nhân | Khoản vay). Khi form ở sidebar: 1 cột, xếp dọc.
+        if not _has_result:
+            row1_left, row1_right = st.columns(2)
+        else:
+            row1_left = st.container()
+            row1_right = st.container()
 
-        col_id1, col_id2 = st.columns(2)
-        with col_id1:
-            id_publish_years = st.number_input(
-                "Đổi CCCD/CMND cách đây (năm)",
-                min_value=0,
-                max_value=50,
-                value=5,
-                step=1,
-                help="Bạn đổi CCCD/CMND lần cuối cách đây bao lâu? CCCD mới = đáng tin cậy hơn",
-            )
-        with col_id2:
-            registration_years = st.number_input(
-                "Đăng ký cư trú cách đây (năm)",
-                min_value=0,
-                max_value=60,
-                value=10,
-                step=1,
-                help="Thời gian đăng ký cư trú tại địa chỉ hiện tại. Ổn định lâu = điểm tốt hơn",
-            )
+        with row1_left:
+            with st.expander("👤 Cá nhân", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    gender = st.selectbox(
+                        "Giới tính",
+                        ["M", "F"],
+                        format_func=lambda x: "Nam" if x == "M" else "Nữ",
+                        help="Chọn giới tính của bạn",
+                    )
+                    age = st.number_input("Tuổi", 18, 80, 30, 1, help="Tuổi hiện tại")
+                with col2:
+                    children = st.number_input(
+                        "Số con",
+                        0,
+                        20,
+                        0,
+                        1,
+                        help="Số con đang nuôi dưỡng. Nhiều con = gánh nặng tài chính lớn hơn",
+                    )
+                    family = st.number_input(
+                        "Thành viên gia đình",
+                        1,
+                        30,
+                        2,
+                        1,
+                        help="Tổng số người cùng sống trong hộ (bao gồm bản thân)",
+                    )
+                id_publish_years = st.number_input(
+                    "Đổi CCCD/CMND cách đây (năm)",
+                    0,
+                    50,
+                    5,
+                    1,
+                    help="Bạn đổi CCCD/CMND lần cuối cách đây bao lâu? CCCD mới = đáng tin cậy hơn",
+                )
+                registration_years = st.number_input(
+                    "Đăng ký cư trú cách đây (năm)",
+                    0,
+                    60,
+                    10,
+                    1,
+                    help="Thời gian đăng ký cư trú tại địa chỉ hiện tại. Ổn định lâu = điểm tốt hơn",
+                )
+                education = st.selectbox(
+                    "Trình độ học vấn",
+                    ["Lower secondary", "Secondary / secondary special", "Incomplete higher", "Higher education", "Academic degree"],
+                    index=3,
+                    format_func={"Lower secondary": "THCS", "Secondary / secondary special": "THPT/Trung cấp", "Incomplete higher": "CĐ/ĐH dở dang", "Higher education": "Đại học", "Academic degree": "Sau đại học"}.get,
+                    help="Cấp học cao nhất bạn đã hoàn thành",
+                )
+                family_status = st.selectbox(
+                    "Tình trạng hôn nhân",
+                    ["Single / not married", "Married", "Civil marriage", "Separated", "Widow"],
+                    index=1,
+                    format_func={"Single / not married": "Độc thân", "Married": "Đã kết hôn", "Civil marriage": "Sống chung", "Separated": "Ly thân", "Widow": "Góa"}.get,
+                    help="Tình trạng gia đình hiện tại",
+                )
 
-        education = st.selectbox(
-            "Trình độ học vấn",
-            [
-                "Lower secondary",
-                "Secondary / secondary special",
-                "Incomplete higher",
-                "Higher education",
-                "Academic degree",
-            ],
-            index=3,
-            format_func={
-                "Lower secondary": "THCS",
-                "Secondary / secondary special": "THPT / Trung cấp",
-                "Incomplete higher": "Cao đẳng / ĐH dở dang",
-                "Higher education": "Đại học",
-                "Academic degree": "Sau đại học",
-            }.get,
-            help="Cấp học cao nhất bạn đã hoàn thành",
-        )
-        family_status = st.selectbox(
-            "Tình trạng hôn nhân",
-            ["Single / not married", "Married", "Civil marriage", "Separated", "Widow"],
-            index=1,
-            format_func={
-                "Single / not married": "Độc thân",
-                "Married": "Đã kết hôn",
-                "Civil marriage": "Sống chung",
-                "Separated": "Ly thân",
-                "Widow": "Góa",
-            }.get,
-            help="Tình trạng gia đình hiện tại",
-        )
-
-        # ---- Nhóm 2: Tài chính ----
-        st.markdown(
-            '<p class="section-title">💰 Thông tin khoản vay</p>',
-            unsafe_allow_html=True,
-        )
-        monthly_income = st.number_input(
-            "Thu nhập hàng tháng (VNĐ)",
-            min_value=0,
-            value=12_000_000,
-            step=500_000,
-            help="Lương thực nhận mỗi tháng (trước thuế). VD: 12 triệu/tháng → nhập 12,000,000",
-        )
-        credit = st.number_input(
-            "Số tiền muốn vay (VNĐ)",
-            min_value=0,
-            value=300_000_000,
-            step=10_000_000,
-            help="Tổng khoản tiền bạn muốn vay. Vay càng lớn so với thu nhập → rủi ro càng cao",
-        )
-        annuity = st.number_input(
-            "Trả góp hàng tháng (VNĐ)",
-            min_value=0,
-            value=10_000_000,
-            step=500_000,
-            help="Số tiền gốc + lãi phải trả mỗi tháng. VD: Vay 300tr, kỳ hạn 36 tháng → ~10tr/tháng",
-        )
-        goods_price = st.number_input(
-            "Giá trị hàng hóa / mục đích vay (VNĐ)",
-            min_value=0,
-            value=280_000_000,
-            step=10_000_000,
-            help="Giá thực tế của tài sản bạn mua (nhà, xe, hàng hóa). Nếu vay > giá trị = rủi ro",
-        )
-        contract_type = st.selectbox(
-            "Loại hợp đồng",
-            ["Cash loans", "Revolving loans"],
-            format_func=lambda x: (
-                "Vay tiền mặt (trả góp cố định)"
-                if x == "Cash loans"
-                else "Tín dụng tuần hoàn (như thẻ tín dụng)"
-            ),
-            help="Vay tiền mặt = vay 1 lần, trả góp đều. Tín dụng tuần hoàn = hạn mức quay vòng",
-        )
+        with row1_right:
+            with st.expander("💰 Khoản vay", expanded=True):
+                st.caption("VD: 12 triệu/tháng → nhập 12000000")
+                monthly_income = st.number_input(
+                    "Thu nhập hàng tháng (VNĐ)",
+                    0,
+                    value=12_000_000,
+                    step=500_000,
+                    help="Lương thực nhận mỗi tháng (trước thuế). VD: 12 triệu/tháng → nhập 12,000,000",
+                )
+                credit = st.number_input(
+                    "Số tiền muốn vay (VNĐ)",
+                    0,
+                    value=300_000_000,
+                    step=10_000_000,
+                    help="Tổng khoản tiền bạn muốn vay. Vay càng lớn so với thu nhập → rủi ro càng cao",
+                )
+                annuity = st.number_input(
+                    "Trả góp hàng tháng (VNĐ)",
+                    0,
+                    value=10_000_000,
+                    step=500_000,
+                    help="Số tiền gốc + lãi phải trả mỗi tháng. VD: Vay 300tr, kỳ hạn 36 tháng → ~10tr/tháng",
+                )
+                goods_price = st.number_input(
+                    "Giá trị hàng hóa / mục đích vay (VNĐ)",
+                    0,
+                    value=280_000_000,
+                    step=10_000_000,
+                    help="Giá thực tế của tài sản bạn mua (nhà, xe, hàng hóa). Nếu vay > giá trị = rủi ro",
+                )
+                contract_type = st.selectbox(
+                    "Loại hợp đồng",
+                    ["Cash loans", "Revolving loans"],
+                    format_func=lambda x: "Vay tiền mặt (trả góp)" if x == "Cash loans" else "Tín dụng tuần hoàn",
+                    help="Vay tiền mặt = vay 1 lần, trả góp đều. Tín dụng tuần hoàn = hạn mức quay vòng",
+                )
 
         # ---- Nhóm 3: Việc làm ----
-        st.markdown(
-            '<p class="section-title">💼 Việc làm & Nghề nghiệp</p>',
-            unsafe_allow_html=True,
-        )
-        emp_years = st.number_input(
-            "Số năm đi làm",
-            min_value=0.0,
-            max_value=60.0,
-            value=5.0,
-            step=0.5,
-            help="Thâm niên ở công việc hiện tại. Làm lâu = ổn định = điểm tốt hơn",
-        )
-        _income_type_map = {
-            "Working": "Đi làm (lương)",
-            "Commercial associate": "Đối tác thương mại",
-            "Pensioner": "Hưu trí",
-            "State servant": "Công chức/Viên chức",
-            "Businessman": "Kinh doanh tự do",
-            "Student": "Sinh viên",
-            "Unemployed": "Thất nghiệp",
-            "Maternity leave": "Nghỉ thai sản",
-        }
-        income_type = st.selectbox(
-            "Loại thu nhập",
-            list(_income_type_map.keys()),
-            format_func=_income_type_map.get,
-            help="Nguồn thu nhập chính của bạn hiện tại",
-        )
-        _occupation_map = {
-            None: "— Bỏ qua —",
-            "Laborers": "Lao động phổ thông",
-            "Sales staff": "Nhân viên kinh doanh",
-            "Core staff": "Nhân viên chính",
-            "Managers": "Quản lý",
-            "Drivers": "Tài xế",
-            "High skill tech staff": "Kỹ thuật cao",
-            "Accountants": "Kế toán",
-            "Medicine staff": "Y tế",
-            "Cooking staff": "Đầu bếp",
-            "Security staff": "Bảo vệ",
-            "Cleaning staff": "Vệ sinh",
-            "Private service staff": "Dịch vụ tư nhân",
-            "Low-skill Laborers": "Lao động giản đơn",
-            "Waiters/barmen staff": "Phục vụ",
-            "Secretaries": "Thư ký",
-            "Realty agents": "Môi giới BĐS",
-            "IT staff": "Công nghệ thông tin",
-            "HR staff": "Nhân sự",
-        }
-        occupation = st.selectbox(
-            "Nghề nghiệp (không bắt buộc)",
-            list(_occupation_map.keys()),
-            format_func=_occupation_map.get,
-            help="Chọn nghề gần nhất với công việc hiện tại. Bỏ qua nếu không muốn khai",
-        )
-
-        _org_type_map = {
-            None: "— Không khai báo —",
-            "Business Entity Type 3": "Doanh nghiệp tư nhân",
-            "Self-employed": "Tự kinh doanh",
-            "Business Entity Type 2": "Công ty TNHH",
-            "Business Entity Type 1": "Công ty cổ phần",
-            "Government": "Cơ quan nhà nước",
-            "Medicine": "Y tế / Bệnh viện",
-            "School": "Trường học (phổ thông)",
-            "Kindergarten": "Mẫu giáo / Mầm non",
-            "University": "Đại học / Cao đẳng",
-            "Construction": "Xây dựng",
-            "Military": "Quân đội",
-            "Police": "Công an",
-            "Bank": "Ngân hàng",
-            "Insurance": "Bảo hiểm",
-            "Agriculture": "Nông nghiệp",
-            "Restaurant": "Nhà hàng / Ăn uống",
-            "Hotel": "Khách sạn / Lưu trú",
-            "Transport: type 4": "Vận tải / Logistics",
-            "Security": "Bảo vệ / An ninh",
-            "Telecom": "Viễn thông / CNTT",
-            "Trade: type 7": "Thương mại / Bán lẻ",
-            "Industry: type 9": "Công nghiệp / Sản xuất",
-            "Other": "Khác",
-        }
-        organization = st.selectbox(
-            "Loại tổ chức nơi làm việc",
-            list(_org_type_map.keys()),
-            format_func=_org_type_map.get,
-            help="Loại công ty/tổ chức bạn đang làm việc. Ảnh hưởng đến đánh giá sự ổn định công việc",
-        )
+        with st.expander("💼 Việc làm", expanded=False):
+            emp_years = st.number_input(
+                "Số năm đi làm",
+                0.0,
+                60.0,
+                5.0,
+                0.5,
+                help="Thâm niên ở công việc hiện tại. Làm lâu = ổn định = điểm tốt hơn",
+            )
+            _income_type_map = {"Working": "Đi làm", "Commercial associate": "Đối tác TM", "Pensioner": "Hưu trí", "State servant": "Công chức", "Businessman": "Kinh doanh", "Student": "Sinh viên", "Unemployed": "Thất nghiệp", "Maternity leave": "Nghỉ thai sản"}
+            income_type = st.selectbox(
+                "Loại thu nhập",
+                list(_income_type_map.keys()),
+                format_func=_income_type_map.get,
+                help="Nguồn thu nhập chính của bạn hiện tại",
+            )
+            _occupation_map = {
+                None: "— Bỏ qua —", "Laborers": "Lao động phổ thông", "Sales staff": "NV kinh doanh", "Core staff": "Nhân viên chính", "Managers": "Quản lý", "Drivers": "Tài xế", "High skill tech staff": "Kỹ thuật cao", "Accountants": "Kế toán", "Medicine staff": "Y tế", "Cooking staff": "Đầu bếp", "Security staff": "Bảo vệ", "Cleaning staff": "Vệ sinh", "Private service staff": "Dịch vụ tư nhân", "Low-skill Laborers": "LĐ giản đơn", "Waiters/barmen staff": "Phục vụ", "Secretaries": "Thư ký", "Realty agents": "Môi giới BĐS", "IT staff": "CNTT", "HR staff": "Nhân sự",
+            }
+            occupation = st.selectbox(
+                "Nghề nghiệp (không bắt buộc)",
+                list(_occupation_map.keys()),
+                format_func=_occupation_map.get,
+                help="Chọn nghề gần nhất với công việc hiện tại. Bỏ qua nếu không muốn khai",
+            )
+            _org_type_map = {
+                None: "— Không khai —", "Business Entity Type 3": "DN tư nhân", "Self-employed": "Tự kinh doanh", "Business Entity Type 2": "TNHH", "Business Entity Type 1": "Cổ phần", "Government": "Nhà nước", "Medicine": "Y tế", "School": "Trường học", "Kindergarten": "Mầm non", "University": "ĐH/CĐ", "Construction": "Xây dựng", "Military": "Quân đội", "Police": "Công an", "Bank": "Ngân hàng", "Insurance": "Bảo hiểm", "Agriculture": "Nông nghiệp", "Restaurant": "Nhà hàng", "Hotel": "Khách sạn", "Transport: type 4": "Vận tải", "Security": "Bảo vệ", "Telecom": "Viễn thông", "Trade: type 7": "Thương mại", "Industry: type 9": "Công nghiệp", "Other": "Khác",
+            }
+            organization = st.selectbox(
+                "Loại tổ chức",
+                list(_org_type_map.keys()),
+                format_func=_org_type_map.get,
+                help="Loại công ty/tổ chức bạn đang làm việc. Ảnh hưởng đến đánh giá sự ổn định công việc",
+            )
 
         # ---- Nhóm 4: Tài sản ----
-        st.markdown(
-            '<p class="section-title">🏠 Tài sản & Nhà ở</p>', unsafe_allow_html=True
-        )
-        col3, col4 = st.columns(2)
-        with col3:
-            own_car = st.selectbox(
-                "Sở hữu ô tô?",
-                ["N", "Y"],
-                format_func=lambda x: "Có" if x == "Y" else "Không",
-                help="Bạn có đang sở hữu ô tô đứng tên không?",
-            )
-        with col4:
-            own_realty = st.selectbox(
-                "Sở hữu BĐS?",
-                ["N", "Y"],
-                format_func=lambda x: "Có" if x == "Y" else "Không",
-                index=1,
-                help="Bạn có nhà/đất đứng tên không? Có BĐS giúp giảm rủi ro đáng kể",
+        with st.expander("🏠 Tài sản & Nhà ở", expanded=False):
+            col3, col4 = st.columns(2)
+            with col3:
+                own_car = st.selectbox(
+                    "Sở hữu ô tô?",
+                    ["N", "Y"],
+                    format_func=lambda x: "Có" if x == "Y" else "Không",
+                    help="Bạn có đang sở hữu ô tô đứng tên không?",
+                )
+            with col4:
+                own_realty = st.selectbox(
+                    "Sở hữu BĐS?",
+                    ["N", "Y"],
+                    format_func=lambda x: "Có" if x == "Y" else "Không",
+                    index=1,
+                    help="Bạn có nhà/đất đứng tên không? Có BĐS giúp giảm rủi ro đáng kể",
+                )
+            car_age = None
+            if own_car == "Y":
+                car_age = st.number_input(
+                    "Tuổi xe (năm)",
+                    0,
+                    80,
+                    5,
+                    1,
+                    help="Xe đã sử dụng bao nhiêu năm? Xe mới = giá trị tài sản cao hơn",
+                )
+            _housing_map = {"House / apartment": "Nhà riêng/Căn hộ", "With parents": "Ở cùng bố mẹ", "Municipal apartment": "Chung cư NN", "Rented apartment": "Thuê nhà", "Office apartment": "Căn hộ VP", "Co-op apartment": "Chung cư HTX"}
+            housing = st.selectbox(
+                "Loại nhà ở",
+                list(_housing_map.keys()),
+                format_func=_housing_map.get,
+                help="Bạn đang ở đâu? Nhà sở hữu được đánh giá tốt hơn nhà thuê",
             )
 
-        car_age = None
-        if own_car == "Y":
-            car_age = st.number_input(
-                "Tuổi xe (năm)",
-                min_value=0,
-                max_value=80,
-                value=5,
-                step=1,
-                help="Xe đã sử dụng bao nhiêu năm? Xe mới = giá trị tài sản cao hơn",
+        # ---- Nhóm 5: Điểm thay thế ----
+        with st.expander("📊 Điểm tín dụng thay thế (0–1)", expanded=False):
+            st.caption("Thang điểm: 0.0 (rất kém) → 1.0 (rất tốt). Để mặc định 0.5 nếu không rõ.")
+            ext1 = st.number_input(
+                "📱 Viễn thông (Viettel, VNPT, Mobi)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.05,
+                key="ext1",
+                help="Dựa trên: thời gian dùng SIM, tần suất nạp tiền, thanh toán cước đúng hạn. Dùng SIM lâu năm + trả cước đều = điểm cao",
             )
-
-        _housing_map = {
-            "House / apartment": "Nhà riêng / Căn hộ (sở hữu)",
-            "With parents": "Ở cùng bố mẹ",
-            "Municipal apartment": "Chung cư nhà nước",
-            "Rented apartment": "Thuê nhà / phòng trọ",
-            "Office apartment": "Căn hộ văn phòng",
-            "Co-op apartment": "Chung cư hợp tác xã",
-        }
-        housing = st.selectbox(
-            "Loại nhà ở",
-            list(_housing_map.keys()),
-            format_func=_housing_map.get,
-            help="Bạn đang ở đâu? Nhà sở hữu được đánh giá tốt hơn nhà thuê",
-        )
-
-        # ---- Nhóm 5: Điểm thay thế (External) ----
-        st.markdown(
-            '<p class="section-title">📊 Điểm tín dụng thay thế</p>',
-            unsafe_allow_html=True,
-        )
-        st.caption(
-            "Thang điểm: **0.0** (rất kém) → **1.0** (rất tốt). Để mặc định 0.5 nếu không rõ."
-        )
-        ext1 = st.number_input(
-            "📱 Viễn thông (Viettel, VNPT, Mobi)",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.5,
-            step=0.05,
-            key="ext1",
-            help="Dựa trên: thời gian dùng SIM, tần suất nạp tiền, thanh toán cước đúng hạn. Dùng SIM lâu năm + trả cước đều = điểm cao",
-        )
-        ext2 = st.number_input(
-            "💡 Tiện ích (Điện, Nước, Internet)",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.5,
-            step=0.05,
-            key="ext2",
-            help="Dựa trên: lịch sử thanh toán hóa đơn điện/nước/internet. Trả đúng hạn nhiều tháng liên tục = điểm cao",
-        )
-        ext3 = st.number_input(
-            "🛒 TMĐT (Shopee, Lazada, Tiki)",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.5,
-            step=0.05,
-            key="ext3",
-            help="Dựa trên: tuổi tài khoản, tần suất mua, tỷ lệ hoàn thành đơn, lịch sử 'mua trước trả sau'",
-        )
+            ext2 = st.number_input(
+                "💡 Tiện ích (Điện, Nước, Internet)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.05,
+                key="ext2",
+                help="Dựa trên: lịch sử thanh toán hóa đơn điện/nước/internet. Trả đúng hạn nhiều tháng liên tục = điểm cao",
+            )
+            ext3 = st.number_input(
+                "🛒 TMĐT (Shopee, Lazada, Tiki)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.05,
+                key="ext3",
+                help="Dựa trên: tuổi tài khoản, tần suất mua, tỷ lệ hoàn thành đơn, lịch sử 'mua trước trả sau'",
+            )
 
         # ---- Nhóm 6: Liên lạc ----
-        st.markdown(
-            '<p class="section-title">📱 Thông tin liên lạc</p>', unsafe_allow_html=True
-        )
-        st.caption(
-            "Tick vào nếu bạn **có thể cung cấp** thông tin liên lạc này. Càng nhiều kênh → càng đáng tin cậy."
-        )
-        col8, col9 = st.columns(2)
-        with col8:
-            has_emp_phone = st.checkbox(
-                "SĐT cơ quan",
-                value=True,
-                help="SĐT bàn tổng đài của công ty bạn đang làm",
-            )
-            has_work_phone = st.checkbox(
-                "SĐT nơi làm việc",
-                value=False,
-                help="SĐT trực tiếp phòng ban / bộ phận của bạn",
-            )
-        with col9:
-            has_phone = st.checkbox(
-                "SĐT nhà", value=True, help="Số điện thoại cố định tại nhà riêng"
-            )
-            has_email = st.checkbox(
-                "Có email", value=True, help="Bạn có email cá nhân đang sử dụng không?"
+        with st.expander("📱 Liên lạc", expanded=False):
+            col8, col9 = st.columns(2)
+            with col8:
+                has_emp_phone = st.checkbox(
+                    "SĐT cơ quan",
+                    value=True,
+                    help="SĐT bàn tổng đài của công ty bạn đang làm",
+                )
+                has_work_phone = st.checkbox(
+                    "SĐT nơi làm",
+                    value=False,
+                    help="SĐT trực tiếp phòng ban / bộ phận của bạn",
+                )
+            with col9:
+                has_phone = st.checkbox(
+                    "SĐT nhà",
+                    value=True,
+                    help="Số điện thoại cố định tại nhà riêng",
+                )
+                has_email = st.checkbox(
+                    "Email",
+                    value=True,
+                    help="Bạn có email cá nhân đang sử dụng không?",
+                )
+            phone_change_days = st.number_input(
+                "Đổi SĐT gần nhất (ngày)",
+                0,
+                10000,
+                365,
+                30,
+                help="Bạn đổi số điện thoại lần cuối cách đây bao nhiêu ngày? Dùng SĐT càng lâu = đáng tin cậy hơn",
             )
 
-        phone_change_days = st.number_input(
-            "Đổi SĐT gần nhất cách đây (ngày)",
-            min_value=0,
-            max_value=10000,
-            value=365,
-            step=30,
-            help="Bạn đổi số điện thoại lần cuối cách đây bao nhiêu ngày? Dùng SĐT căng lâu = đáng tin cậy hơn",
-        )
-
-        # ---- Nhóm 7: Mạng lưới xã hội ----
-        st.markdown(
-            '<p class="section-title">👥 Mạng lưới xã hội</p>', unsafe_allow_html=True
-        )
-        st.caption(
-            "Trong số bạn bè/người thân của bạn, có ai **vỡ nợ/trễ hạn trả nợ** gần đây không?"
-        )
-        col_soc1, col_soc2 = st.columns(2)
-        with col_soc1:
+        # ---- Nhóm 7: Mạng lưới ----
+        with st.expander("👥 Mạng lưới xã hội", expanded=False):
             def_30 = st.number_input(
-                "Vỡ nợ trong 30 ngày",
-                min_value=0,
-                max_value=10,
-                value=0,
-                step=1,
+                "Người quen vỡ nợ 30 ngày",
+                0,
+                10,
+                0,
+                1,
                 help="Số người quen bị vỡ nợ/trễ hạn trong 30 ngày gần nhất. 0 = không có ai",
             )
-        with col_soc2:
             def_60 = st.number_input(
-                "Vỡ nợ trong 60 ngày",
-                min_value=0,
-                max_value=10,
-                value=0,
-                step=1,
+                "Người quen vỡ nợ 60 ngày",
+                0,
+                10,
+                0,
+                1,
                 help="Số người quen bị vỡ nợ/trễ hạn trong 60 ngày gần nhất. 0 = không có ai",
             )
 
-        # ---- Submit ----
         st.markdown("---")
-        submitted = st.form_submit_button(
-            "🔍  Đánh Giá Tín Dụng", use_container_width=True, type="primary"
-        )
+        submitted = st.form_submit_button("🔍 Đánh giá tín dụng", width="stretch", type="primary")
 
-# ============================================================
-# BUILD USER INPUT DICT
-# ============================================================
+
+# Build user_input (giống app.py)
 user_input = {
     "CODE_GENDER": gender,
     "AGE_YEARS": float(age),
@@ -692,7 +1789,7 @@ user_input = {
     "CNT_FAM_MEMBERS": float(family),
     "NAME_EDUCATION_TYPE": education,
     "NAME_FAMILY_STATUS": family_status,
-    "AMT_INCOME_TOTAL": float(monthly_income) * 12,  # Model cần thu nhập năm
+    "AMT_INCOME_TOTAL": float(monthly_income) * 12,
     "AMT_CREDIT": float(credit),
     "AMT_ANNUITY": float(annuity),
     "AMT_GOODS_PRICE": float(goods_price),
@@ -721,376 +1818,273 @@ user_input = {
 
 
 # ============================================================
-# HELPER: Gauge chart
+# HELPERS: Gauge, SHAP chart
 # ============================================================
 def make_gauge(score: int, tier_color: str) -> go.Figure:
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=score,
-            number={"font": {"size": 48, "color": tier_color}},
-            gauge={
-                "axis": {
-                    "range": [300, 850],
-                    "tickwidth": 1,
-                    "tickcolor": "#ccc",
-                    "tickvals": [300, 400, 500, 580, 670, 740, 800, 850],
-                },
-                "bar": {"color": tier_color, "thickness": 0.3},
-                "bgcolor": "#f5f5f5",
-                "steps": [
-                    {"range": [300, 580], "color": "#ffcdd2"},  # Poor
-                    {"range": [580, 670], "color": "#fff9c4"},  # Fair
-                    {"range": [670, 740], "color": "#bbdefb"},  # Good
-                    {"range": [740, 800], "color": "#c8e6c9"},  # Very Good
-                    {"range": [800, 850], "color": "#a5d6a7"},  # Exceptional
-                ],
-                "threshold": {
-                    "line": {"color": "black", "width": 3},
-                    "thickness": 0.8,
-                    "value": score,
-                },
-            },
-            title={"text": "FICO Score (300 – 850)", "font": {"size": 16}},
-        )
-    )
-    fig.update_layout(height=280, margin=dict(l=30, r=30, t=50, b=10))
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=score,
+        number={"font": {"size": 44, "color": tier_color}},
+        gauge={
+            "axis": {"range": [300, 850], "tickwidth": 1, "tickcolor": "#ccc", "tickvals": [300, 400, 500, 580, 670, 740, 800, 850]},
+            "bar": {"color": tier_color, "thickness": 0.3},
+            "bgcolor": "#f5f5f5",
+            "steps": [
+                {"range": [300, 580], "color": "#ffcdd2"},
+                {"range": [580, 670], "color": "#fff9c4"},
+                {"range": [670, 740], "color": "#bbdefb"},
+                {"range": [740, 800], "color": "#c8e6c9"},
+                {"range": [800, 850], "color": "#a5d6a7"},
+            ],
+            "threshold": {"line": {"color": "black", "width": 3}, "thickness": 0.8, "value": score},
+        },
+        title={"text": "FICO Score (300–850)", "font": {"size": 14}},
+    ))
+    fig.update_layout(height=260, margin=dict(l=25, r=25, t=45, b=10))
     return fig
 
 
-# ============================================================
-# HELPER: SHAP waterfall chart
-# ============================================================
-def make_shap_chart(shap_top: list[dict]) -> go.Figure:
+def make_shap_chart(shap_top: list) -> go.Figure | None:
     if not shap_top:
         return None
-
-    features = [
-        FEATURE_LABELS_VI.get(s["feature"], s["feature"]) for s in reversed(shap_top)
-    ]
+    features = [FEATURE_LABELS_VI.get(s["feature"], s["feature"]) for s in reversed(shap_top)]
     values = [s["shap_value"] for s in reversed(shap_top)]
     colors = ["#ef5350" if v > 0 else "#66bb6a" for v in values]
-
-    fig = go.Figure(
-        go.Bar(
-            x=values,
-            y=features,
-            orientation="h",
-            marker_color=colors,
-            text=[f"{v:+.3f}" for v in values],
-            textposition="outside",
-            textfont={"size": 11},
-        )
-    )
-    fig.update_layout(
-        title={"text": "Giải thích kết quả (SHAP)", "font": {"size": 14}},
-        xaxis_title="Mức ảnh hưởng",
-        height=max(300, 36 * len(shap_top)),
-        margin=dict(l=10, r=10, t=40, b=30),
-        yaxis={"tickfont": {"size": 12}},
-        plot_bgcolor="white",
-    )
+    fig = go.Figure(go.Bar(x=values, y=features, orientation="h", marker_color=colors, text=[f"{v:+.3f}" for v in values], textposition="outside", textfont={"size": 11}))
+    fig.update_layout(title={"text": "Giải thích (SHAP)", "font": {"size": 14}}, xaxis_title="Mức ảnh hưởng", height=max(280, 32 * len(shap_top)), margin=dict(l=10, r=10, t=35, b=25), yaxis={"tickfont": {"size": 11}}, plot_bgcolor="white")
     fig.add_vline(x=0, line_width=1, line_color="grey")
     return fig
 
 
+def collect_improvement_suggestions(shap_top_features: list[dict]) -> list[str]:
+    suggestions = []
+    seen_keys = set()
+    for item in shap_top_features:
+        if item.get("direction") != "risk":
+            continue
+        feat = item.get("feature")
+        key = None
+        if feat in ("CREDIT_INCOME_RATIO", "ANNUITY_INCOME_RATIO", "AMT_INCOME_TOTAL", "INCOME_PER_PERSON"):
+            key = "income"
+        elif feat in ("EMPLOYMENT_YEARS", "EMPLOYED_TO_AGE_RATIO", "DAYS_EMPLOYED"):
+            key = "employment"
+        elif feat in ("AMT_CREDIT", "CREDIT_TERM_MONTHS", "AMT_ANNUITY", "PAYMENT_RATE", "GOODS_CREDIT_RATIO"):
+            key = "credit_amount"
+        elif feat in ("FLAG_OWN_CAR", "FLAG_OWN_REALTY", "OWN_CAR_AGE"):
+            key = "assets"
+        elif feat in ("CONTACT_COUNT", "FLAG_EMP_PHONE", "FLAG_WORK_PHONE", "FLAG_PHONE", "FLAG_EMAIL"):
+            key = "contact"
+        elif isinstance(feat, str) and feat.startswith("EXT_SOURCE"):
+            key = "ext_source"
+        elif feat in ("SOCIAL_DEF_TOTAL", "DEF_30_CNT_SOCIAL_CIRCLE", "DEF_60_CNT_SOCIAL_CIRCLE"):
+            key = "social"
+        if key and key not in seen_keys:
+            seen_keys.add(key)
+            suggestion = IMPROVEMENT_SUGGESTIONS.get(key)
+            if suggestion:
+                suggestions.append(suggestion)
+    return suggestions
+
+
 # ============================================================
-# MAIN CONTENT — Kết quả
+# MAIN: Submit → lưu result
 # ============================================================
 if submitted:
     with st.spinner("Đang phân tích hồ sơ..."):
         result = engine.predict(user_input)
     st.session_state.scoring_result = result
     st.session_state.scoring_input = dict(user_input)
-    st.session_state.chat_messages = []  # Reset chat khi đánh giá mới
+    st.session_state.chat_messages = []
+    st.session_state.report_pdf_bytes = None
+    st.session_state.report_pdf_valid = False
+    st.session_state.report_pdf_meta = {}
+    st.session_state.report_pdf_signature = ""
+    st.rerun()
 
-if "scoring_result" in st.session_state:
-    result = st.session_state.scoring_result
-    score = result["credit_score"]
-    proba = result["probability"]
-    risk = RISK_LEVELS[result["risk_key"]]
 
-    # Determine tier
-    tier = next(
-        (t for t in TIERS if t["score_min"] <= score <= t["score_max"]), TIERS[-1]
+# ============================================================
+# Chưa có kết quả → dừng (form đã nằm ở main phía trên)
+# ============================================================
+if "scoring_result" not in st.session_state:
+    st.markdown("---")
+    st.markdown(
+        '<div style="text-align:center; color:#9e9e9e; font-size:0.8rem;">Credit Scoring Demo • Dành cho người chưa có lịch sử tín dụng</div>',
+        unsafe_allow_html=True,
     )
+    st.stop()
 
-    # ---- Row 1: Score + Tier ----
-    col_score, col_tier = st.columns([1, 1.3])
 
+# ============================================================
+# CÓ KẾT QUẢ — Tabs
+# ============================================================
+result = st.session_state.scoring_result
+score = result["credit_score"]
+proba = result["probability"]
+risk = RISK_LEVELS[result["risk_key"]]
+tier = next((t for t in TIERS if t["score_min"] <= score <= t["score_max"]), TIERS[-1])
+
+# Nút chỉnh sửa + Chuẩn bị/Tải PDF
+current_pdf_signature = f"{result.get('credit_score')}|{result.get('probability')}|{result.get('risk_key')}|{repr(sorted(st.session_state.scoring_input.items()))}"
+if st.session_state.get("report_pdf_signature") != current_pdf_signature:
+    st.session_state.report_pdf_bytes = None
+    st.session_state.report_pdf_valid = False
+    st.session_state.report_pdf_meta = {}
+    st.session_state.report_pdf_signature = ""
+
+col_btn1, col_btn2, _ = st.columns([1, 1, 3])
+with col_btn1:
+    if st.button("✏️ Chỉnh sửa hồ sơ / Đánh giá lại", width="stretch"):
+        for key in [
+            "scoring_result",
+            "scoring_input",
+            "chat_messages",
+            "report_pdf_bytes",
+            "report_pdf_valid",
+            "report_pdf_meta",
+            "report_pdf_signature",
+        ]:
+            st.session_state.pop(key, None)
+        st.rerun()
+with col_btn2:
+    if st.button("🧾 Chuẩn bị báo cáo PDF", width="stretch"):
+        with st.spinner("Đang tạo báo cáo PDF..."):
+            _advisor = CreditAdvisor()
+            _assessment_result = _advisor.assess(result, st.session_state.scoring_input, FEATURE_LABELS_VI)
+            _suggestions = collect_improvement_suggestions(result.get("shap_top_features", []))
+            _fig_g = make_gauge(score, tier["color"])
+            _fig_s = make_shap_chart(result["shap_top_features"])
+            _pdf_bytes, _pdf_meta = build_credit_report_pdf(
+                result=result,
+                user_input=st.session_state.scoring_input,
+                feature_labels=FEATURE_LABELS_VI,
+                assessment_text=_assessment_result.text,
+                suggestions_list=_suggestions,
+                fig_gauge=_fig_g,
+                fig_shap=_fig_s,
+                return_meta=True,
+            )
+        st.session_state.report_pdf_bytes = _pdf_bytes
+        st.session_state.report_pdf_valid = True
+        st.session_state.report_pdf_meta = _pdf_meta
+        st.session_state.report_pdf_signature = current_pdf_signature
+
+if st.session_state.get("report_pdf_valid") and st.session_state.get("report_pdf_bytes"):
+    _download_kwargs = dict(
+        label="📥 Tải báo cáo PDF",
+        data=st.session_state.report_pdf_bytes,
+        file_name="bao_cao_danh_gia_tin_dung.pdf",
+        mime="application/pdf",
+        width="stretch",
+    )
+    try:
+        import inspect
+
+        if "on_click" in inspect.signature(st.download_button).parameters:
+            _download_kwargs["on_click"] = "ignore"
+    except Exception:
+        pass
+    st.download_button(**_download_kwargs)
+    _pdf_warnings = st.session_state.get("report_pdf_meta", {}).get("warnings", [])
+    if _pdf_warnings:
+        st.warning("\n".join([f"- {w}" for w in _pdf_warnings]))
+else:
+    st.caption("Nhấn **Chuẩn bị báo cáo PDF** trước, rồi bấm **Tải báo cáo PDF**.")
+
+tab_overview, tab_shap, tab_assessment, tab_chat = st.tabs(["📈 Kết quả", "🔬 Giải thích SHAP", "📋 Nhận xét", "🤖 Hỏi AI"])
+
+# ---- Tab 1: Kết quả ----
+with tab_overview:
+    col_score, col_tier = st.columns([1, 1.2])
     with col_score:
         fig_gauge = make_gauge(score, tier["color"])
         st.plotly_chart(fig_gauge, width="stretch")
-
+        st.caption(f"Mức hiện tại: **{tier['name']}**")
     with col_tier:
         st.markdown(
-            f"""
-<div class="tier-card" style="background: {tier['color']}15; border-color: {tier['color']};">
-    <h2 style="margin:0; color: {tier['color']};">{tier['icon']} {tier['name']}</h2>
-    <p style="margin: 0.5rem 0 0; font-size: 1rem;">{tier['description']}</p>
-</div>
-""",
+            f'<div class="tier-card" style="background:{tier["color"]}15; border-color:{tier["color"]};"><h2 style="margin:0; color:{tier["color"]};">{tier["icon"]} {tier["name"]}</h2><p style="margin:0.4rem 0 0; font-size:0.95rem;">{tier["description"]}</p></div>',
             unsafe_allow_html=True,
         )
-
-        # KPI metrics
         m1, m2, m3 = st.columns(3)
         with m1:
-            st.markdown(
-                f'<div class="metric-box"><div class="value" style="color: {tier["color"]};">{score}</div><div class="label">FICO Score</div></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<div class="metric-box"><div class="value" style="color:{tier["color"]};">{score}</div><div class="label">FICO Score</div></div>', unsafe_allow_html=True)
         with m2:
-            st.markdown(
-                f'<div class="metric-box"><div class="value" style="color: {risk["color"]};">{proba:.1%}</div><div class="label">Xác suất vỡ nợ</div></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<div class="metric-box"><div class="value" style="color:{risk["color"]};">{proba:.1%}</div><div class="label">Xác suất vỡ nợ</div></div>', unsafe_allow_html=True)
         with m3:
             cl = result["credit_limit"]
-            cl_text = f"{cl:,.0f}" if cl > 0 else "N/A"
-            st.markdown(
-                f'<div class="metric-box"><div class="value">{cl_text}</div><div class="label">Hạn mức đề xuất</div></div>',
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("---")
-
-    # ---- Row 2: SHAP explanation + Suggestions ----
-    col_shap, col_suggest = st.columns([1.4, 1])
-
-    with col_shap:
-        st.markdown(
-            '<p class="section-title">🔬 Giải Thích Kết Quả (SHAP)</p>',
-            unsafe_allow_html=True,
-        )
-        fig_shap = make_shap_chart(result["shap_top_features"])
-        if fig_shap:
-            st.plotly_chart(fig_shap, width="stretch")
-            st.caption(
-                "🔴 **Đỏ** = tăng rủi ro vỡ nợ &nbsp;|&nbsp; 🟢 **Xanh** = giảm rủi ro vỡ nợ. "
-                "Thanh càng dài → ảnh hưởng càng lớn."
-            )
-        else:
-            st.info("SHAP explainer chưa sẵn sàng.")
-
-    with col_suggest:
-        st.markdown(
-            '<p class="section-title">💡 Đề Xuất Cải Thiện</p>', unsafe_allow_html=True
-        )
-
-        # Generate suggestions based on SHAP
-        shown = set()
-        for item in result.get("shap_top_features", []):
-            if item["direction"] != "risk":
-                continue
-            feat = item["feature"]
-            # Map feature → suggestion category
-            if feat in (
-                "CREDIT_INCOME_RATIO",
-                "ANNUITY_INCOME_RATIO",
-                "AMT_INCOME_TOTAL",
-                "INCOME_PER_PERSON",
-            ):
-                key = "income"
-            elif feat in ("EMPLOYMENT_YEARS", "EMPLOYED_TO_AGE_RATIO", "DAYS_EMPLOYED"):
-                key = "employment"
-            elif feat in (
-                "AMT_CREDIT",
-                "CREDIT_TERM_MONTHS",
-                "AMT_ANNUITY",
-                "PAYMENT_RATE",
-                "GOODS_CREDIT_RATIO",
-            ):
-                key = "credit_amount"
-            elif feat in ("FLAG_OWN_CAR", "FLAG_OWN_REALTY", "OWN_CAR_AGE"):
-                key = "assets"
-            elif feat in (
-                "CONTACT_COUNT",
-                "FLAG_EMP_PHONE",
-                "FLAG_WORK_PHONE",
-                "FLAG_PHONE",
-                "FLAG_EMAIL",
-            ):
-                key = "contact"
-            elif feat.startswith("EXT_SOURCE"):
-                key = "ext_source"
-            elif feat in (
-                "SOCIAL_DEF_TOTAL",
-                "DEF_30_CNT_SOCIAL_CIRCLE",
-                "DEF_60_CNT_SOCIAL_CIRCLE",
-            ):
-                key = "social"
-            else:
-                continue
-
-            if key not in shown:
-                shown.add(key)
-                st.markdown(
-                    f'<div class="suggestion-card">💡 {IMPROVEMENT_SUGGESTIONS[key]}</div>',
-                    unsafe_allow_html=True,
-                )
-
-        if not shown:
-            st.success("Hồ sơ của bạn rất tốt! Không cần cải thiện thêm. 🎉")
-
-        # Decision details
-        st.markdown(
-            '<p class="section-title">📋 Chi Tiết Quyết Định</p>',
-            unsafe_allow_html=True,
-        )
-        decision_data = {
-            "FICO Score": f"{score}/850",
-            "Xác suất vỡ nợ": f"{proba:.2%}",
-            "Mức rủi ro": f"{risk['emoji']} {risk['label']}",
-            "Quyết định": f"{tier['icon']} {tier['name']}",
-            "Hạn mức đề xuất": (
-                f"{result['credit_limit']:,.0f}"
-                if result["credit_limit"] > 0
-                else "Không cấp"
-            ),
-        }
+            cl_text = format_vnd(cl) if cl > 0 else "N/A"
+            st.markdown(f'<div class="metric-box"><div class="value">{cl_text}</div><div class="label">Hạn mức đề xuất</div></div>', unsafe_allow_html=True)
+        st.markdown("**Chi tiết:**")
+        st.markdown(f"- FICO: {score}/850 • Xác suất vỡ nợ: {proba:.2%} • Rủi ro: {risk['emoji']} {risk['label']}")
         if tier["interest_modifier"] is not None:
-            base_rate = 12.0  # Base interest rate %
-            adjusted = base_rate + tier["interest_modifier"] * 100
-            decision_data["Lãi suất dự kiến"] = f"{adjusted:.1f}%/năm"
+            adj = 12.0 + tier["interest_modifier"] * 100
+            st.markdown(f"- Lãi suất dự kiến: **{adj:.1f}%/năm**")
 
-        for k, v in decision_data.items():
-            st.markdown(f"**{k}:** {v}")
-
-    # ---- Row 3: Template Assessment (ALWAYS shown) ----
     st.markdown("---")
-    st.markdown(
-        '<p class="section-title">📋 Nhận Xét Tín Dụng</p>',
-        unsafe_allow_html=True,
-    )
-    template_advisor = CreditAdvisor()  # No API key → always template
-    template_result = template_advisor.assess(
-        result, st.session_state.scoring_input, FEATURE_LABELS_VI
-    )
-    st.markdown(template_result.text)
+    st.markdown("**💡 Đề xuất cải thiện**")
+    _suggestions_overview = collect_improvement_suggestions(result.get("shap_top_features", []))
+    for suggestion in _suggestions_overview:
+        st.markdown(f'<div class="suggestion-card">💡 {suggestion}</div>', unsafe_allow_html=True)
+    if not _suggestions_overview:
+        st.success("Hồ sơ tốt, không cần cải thiện thêm.")
 
-    # ---- Row 4: Tiered System Legend ----
     st.markdown("---")
-    st.markdown(
-        '<p class="section-title">📊 Hệ Thống Xếp Hạng Tín Dụng</p>',
-        unsafe_allow_html=True,
-    )
+    st.markdown("**📊 Hệ thống xếp hạng**")
     tier_cols = st.columns(len(TIERS))
     for i, t in enumerate(TIERS):
         with tier_cols[i]:
             is_current = t["name"] == tier["name"]
             border = f"3px solid {t['color']}" if is_current else "1px solid #e0e0e0"
             bg = f"{t['color']}18" if is_current else "#fafafa"
-            st.markdown(
-                f"""
-<div style="border: {border}; background: {bg}; border-radius: 10px; padding: 0.8rem; text-align: center; min-height: 130px;">
-    <div style="font-size: 1.8rem;">{t['icon']}</div>
-    <div style="font-weight: 700; color: {t['color']}; font-size: 0.85rem;">{t['name']}</div>
-    <div style="font-size: 0.75rem; color: #757575; margin-top: 0.3rem;">{t['score_min']}–{t['score_max']} điểm</div>
-    {'<div style="margin-top:0.3rem; font-size:0.7rem; font-weight:600; color:' + t["color"] + ';">◄ BẠN Ở ĐÂY</div>' if is_current else ''}
-</div>
-""",
-                unsafe_allow_html=True,
-            )
+            cur = " ◄ Bạn" if is_current else ""
+            st.markdown(f'<div style="border:{border}; background:{bg}; border-radius:8px; padding:0.6rem; text-align:center; min-height:100px;"><div style="font-size:1.4rem;">{t["icon"]}</div><div style="font-weight:700; color:{t["color"]}; font-size:0.8rem;">{t["name"]}</div><div style="font-size:0.7rem; color:#757575;">{t["score_min"]}–{t["score_max"]}{cur}</div></div>', unsafe_allow_html=True)
 
-    # ---- Row 5: AI Chatbot ----
-    st.markdown("---")
-    st.markdown(
-        '<p class="section-title">🤖 Hỏi Tư Vấn Viên AI</p>',
-        unsafe_allow_html=True,
-    )
-    st.caption(
-        "Hỏi bất kỳ câu hỏi nào về hồ sơ tín dụng — "
-        "AI sẽ tư vấn dựa trên kết quả vừa chấm điểm."
-    )
-    st.warning(
-        "⚠️ **Lưu ý:** AI có thể mắc sai sót. Mọi câu trả lời chỉ mang tính "
-        "tham khảo, không phải cam kết từ ngân hàng. Luôn kiểm chứng thông tin "
-        "quan trọng với chuyên viên tư vấn.",
-        icon="⚠️",
-    )
-
-    if not ai_api_key:
-        st.info(
-            "💡 Tính năng tư vấn AI chưa được kích hoạt. "
-            "Vui lòng cấu hình OPENROUTER_API_KEY trong file .env."
-        )
+# ---- Tab 2: SHAP ----
+with tab_shap:
+    st.markdown("🔴 **Đỏ** = tăng rủi ro vỡ nợ • 🟢 **Xanh** = giảm rủi ro. Thanh càng dài → ảnh hưởng càng lớn.")
+    fig_shap = make_shap_chart(result["shap_top_features"])
+    if fig_shap:
+        st.plotly_chart(fig_shap, width="stretch")
     else:
-        # Display chat history
+        st.info("SHAP chưa sẵn sàng.")
+
+# ---- Tab 3: Nhận xét ----
+with tab_assessment:
+    template_advisor = CreditAdvisor()
+    template_result = template_advisor.assess(result, st.session_state.scoring_input, FEATURE_LABELS_VI)
+    # Hiển thị tóm tắt + expander chi tiết
+    lines = template_result.text.strip().split("\n")
+    summary_lines = [l for l in lines if l.startswith("### 1.") or l.startswith("- **FICO") or l.startswith("- **Xác suất") or (l.startswith("### 5.") and "Kết luận" in "".join(lines[lines.index(l):lines.index(l)+2]))]
+    intro = "\n".join(lines[: min(15, len(lines))])
+    st.markdown(intro)
+    if len(lines) > 15:
+        with st.expander("📄 Xem đầy đủ nhận xét"):
+            st.markdown(template_result.text)
+
+# ---- Tab 4: Chat AI ----
+with tab_chat:
+    st.caption("Hỏi về hồ sơ tín dụng — AI tư vấn dựa trên kết quả vừa chấm.")
+    st.warning("AI có thể sai. Chỉ tham khảo, không thay cam kết ngân hàng.", icon="⚠️")
+    if not ai_api_key:
+        st.info("Cấu hình **OPENROUTER_API_KEY** trong file `.env` để bật tư vấn AI. Lấy key tại [OpenRouter](https://openrouter.ai/keys).")
+    else:
         for msg in st.session_state.get("chat_messages", []):
-            avatar = "👤" if msg["role"] == "user" else "🤖"
-            with st.chat_message(msg["role"], avatar=avatar):
+            with st.chat_message(msg["role"], avatar="👤" if msg["role"] == "user" else "🤖"):
                 st.markdown(msg["content"])
-
-        # Chat input form
         with st.form("chat_form", clear_on_submit=True):
-            question = st.text_input(
-                "Câu hỏi",
-                placeholder="VD: Làm sao để tăng điểm tín dụng của tôi?",
-                label_visibility="collapsed",
-            )
-            send_btn = st.form_submit_button(
-                "Gửi câu hỏi 🚀", use_container_width=True
-            )
+            question = st.text_input("Câu hỏi", placeholder="VD: Làm sao tăng điểm tín dụng?", label_visibility="collapsed")
+            if st.form_submit_button("Gửi 🚀", width="stretch") and question.strip():
+                st.session_state.chat_messages.append({"role": "user", "content": question})
+                if len(st.session_state.chat_messages) > 10:
+                    st.session_state.chat_messages = st.session_state.chat_messages[-10:]
+                with st.spinner("AI đang trả lời..."):
+                    chat_advisor = CreditAdvisor(api_key=ai_api_key, model=ai_model)
+                    response = chat_advisor.chat(st.session_state.chat_messages, result, st.session_state.scoring_input, FEATURE_LABELS_VI)
+                st.session_state.chat_messages.append({"role": "assistant", "content": response})
+                st.rerun()
 
-        if send_btn and question.strip():
-            st.session_state.chat_messages.append(
-                {"role": "user", "content": question}
-            )
-            # Limit chat history to last 10 messages (prevent context drift)
-            if len(st.session_state.chat_messages) > 10:
-                st.session_state.chat_messages = st.session_state.chat_messages[-10:]
-            with st.spinner("🤖 AI đang suy nghĩ..."):
-                chat_advisor = CreditAdvisor(
-                    api_key=ai_api_key, model=ai_model
-                )
-                response = chat_advisor.chat(
-                    st.session_state.chat_messages,
-                    result,
-                    st.session_state.scoring_input,
-                    FEATURE_LABELS_VI,
-                )
-            st.session_state.chat_messages.append(
-                {"role": "assistant", "content": response}
-            )
-            st.rerun()
-
-else:
-    # ---- Landing page ----
-    st.markdown(
-        """
-### 👈 Điền thông tin ở thanh bên trái để bắt đầu
-
-Ứng dụng sẽ đánh giá hồ sơ tín dụng của bạn dựa trên:
-
-| Nhóm | Thông tin |
-|------|----------|
-| 👤 **Cá nhân** | Tuổi, giới tính, học vấn, tình trạng hôn nhân |
-| 💰 **Tài chính** | Thu nhập, số tiền vay, kỳ hạn |
-| 💼 **Việc làm** | Nghề nghiệp, thâm niên |
-| 🏠 **Tài sản** | Nhà ở, xe cộ |
-| 📊 **Điểm thay thế** | Viễn thông, tiện ích (điện/nước), thương mại điện tử |
-| 📱 **Liên lạc** | Kênh liên lạc có sẵn |
-
-**Kết quả bao gồm:**
-- 📈 **FICO Score** (300-850)
-- 🎯 **Xác suất vỡ nợ** (đã hiệu chỉnh)
-- 🔬 **Giải thích SHAP** cho từng yếu tố
-- 💡 **Đề xuất cải thiện** cụ thể
-- 💳 **Hạn mức tín dụng đề xuất** (VNĐ)
-"""
-    )
-
-# ============================================================
-# FOOTER
-# ============================================================
+# Footer (không hardcode AUC/features)
 st.markdown("---")
 st.markdown(
-    """
-<div style="text-align: center; color: #9e9e9e; font-size: 0.8rem; padding: 0.5rem;">
-    Credit Scoring Demo • LightGBM + SHAP • Model AUC: 0.767 • 48 features<br>
-    Dành cho người chưa có lịch sử tín dụng — Chỉ sử dụng dữ liệu từ hồ sơ đăng ký
-</div>
-""",
+    '<div style="text-align:center; color:#9e9e9e; font-size:0.8rem;">Credit Scoring Demo • Dành cho người chưa có lịch sử tín dụng • Chỉ dùng dữ liệu hồ sơ đăng ký</div>',
     unsafe_allow_html=True,
 )

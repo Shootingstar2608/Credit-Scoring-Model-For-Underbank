@@ -1,0 +1,561 @@
+% ============================================================
+% CLEAN PREAMBLE — Article class with Vietnamese title page
+% ============================================================
+\documentclass[12pt,a4paper]{article}
+
+% --- Encoding & Language ---
+\usepackage[T5]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese,english]{babel}  % English primary, Vietnamese available
+
+% --- Math ---
+\usepackage{amsmath,amssymb,amsfonts}
+
+% --- Graphics & Layout ---
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% --- Tables ---
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+
+% --- TikZ & Diagrams ---
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc}
+\usepackage{pgfgantt}
+
+% --- Code Listings ---
+\usepackage{listings}
+\usepackage{listingsutf8}
+\usepackage{textcomp}
+
+% --- References & Links ---
+\usepackage{cite}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% --- Misc ---
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{mdframed}
+\setlist{nosep, leftmargin=*}
+
+% --- Page Geometry ---
+\geometry{margin=2.5cm}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+% --- Force English "Abstract" label (override Vietnamese babel) ---
+\addto\captionsenglish{\renewcommand{\abstractname}{Abstract}}
+
+% --- Subsection depth ---
+\setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{3}
+
+% --- Colors ---
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+% --- Code listing style ---
+\lstset{
+    language=Python,
+    inputencoding=utf8/latin1,
+    extendedchars=true,
+    basicstyle=\ttfamily\footnotesize,
+    commentstyle=\color{dkgreen},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{mauve},
+    breaklines=true,
+    breakatwhitespace=true,
+    frame=single,
+    showstringspaces=false,
+    tabsize=3,
+    numbers=left,
+    stepnumber=1,
+    numbersep=5pt,
+    literate=
+        {á}{{\'a}}1  {à}{{\`a}}1  {ả}{{\h{a}}}1  {ã}{{\~a}}1  {ạ}{{\d{a}}}1
+        {â}{{\^a}}1  {ấ}{{\'\^a}}1 {ầ}{{\`\^a}}1 {ẩ}{{\h{\^a}}}1 {ẫ}{{\~\^a}}1 {ậ}{{\d{\^a}}}1
+        {ă}{{\u{a}}}1 {ắ}{{\'\u{a}}}1 {ằ}{{\`\u{a}}}1 {ẳ}{{\h{\u{a}}}}1 {ẵ}{{\~\u{a}}}1 {ặ}{{\d{\u{a}}}}1
+        {é}{{\'e}}1  {è}{{\`e}}1  {ẻ}{{\h{e}}}1  {ẽ}{{\~e}}1  {ẹ}{{\d{e}}}1
+        {ê}{{\^e}}1  {ế}{{\'\^e}}1 {ề}{{\`\^e}}1 {ể}{{\h{\^e}}}1 {ễ}{{\~\^e}}1 {ệ}{{\d{\^e}}}1
+        {í}{{\'i}}1  {ì}{{\`i}}1  {ỉ}{{\h{i}}}1  {ĩ}{{\~i}}1  {ị}{{\d{i}}}1
+        {ó}{{\'o}}1  {ò}{{\`o}}1  {ỏ}{{\h{o}}}1  {õ}{{\~o}}1  {ọ}{{\d{o}}}1
+        {ô}{{\^o}}1  {ố}{{\'\^o}}1 {ồ}{{\`\^o}}1 {ổ}{{\h{\^o}}}1 {ỗ}{{\~\^o}}1 {ộ}{{\d{\^o}}}1
+        {ơ}{{\ohorn}}1 {ớ}{{\'\ohorn}}1 {ờ}{{\`\ohorn}}1 {ở}{{\h{\ohorn}}}1 {ỡ}{{\~\ohorn}}1 {ợ}{{\d{\ohorn}}}1
+        {ú}{{\'u}}1  {ù}{{\`u}}1  {ủ}{{\h{u}}}1  {ũ}{{\~u}}1  {ụ}{{\d{u}}}1
+        {ư}{{\uhorn}}1 {ứ}{{\'\uhorn}}1 {ừ}{{\`\uhorn}}1 {ử}{{\h{\uhorn}}}1 {ữ}{{\~\uhorn}}1 {ự}{{\d{\uhorn}}}1
+        {ý}{{\'y}}1  {ỳ}{{\`y}}1  {ỷ}{{\h{y}}}1  {ỹ}{{\~y}}1  {ỵ}{{\d{y}}}1
+        {đ}{{\dj}}1  {Đ}{{\DJ}}1
+}
+
+% ============================================================
+\begin{document}
+
+% ============================================================
+% TITLE PAGE (Vietnamese — for university submission)
+% ============================================================
+\begin{titlepage}
+\begin{center}
+    \selectlanguage{vietnamese}
+    ĐẠI HỌC QUỐC GIA THÀNH PHỐ HỒ CHÍ MINH \\
+    TRƯỜNG ĐẠI HỌC BÁCH KHOA \\
+    KHOA KHOA HỌC \& KĨ THUẬT MÁY TÍNH
+\end{center}
+
+\vspace{1cm}
+
+\begin{figure}[h!]
+    \begin{center}
+        \includegraphics[width=3cm]{Logo BK.png}
+    \end{center}
+\end{figure}
+
+\vspace{1cm}
+
+\begin{center}
+    \begin{tabular}{c}
+        \multicolumn{1}{l}{\textbf{{\Large SWIN HACKATHON 2026 PROPOSAL REPORT}}}\\
+        ~~\\
+        \hline
+        \\
+        \multicolumn{1}{l}{\textbf{{\Large Đề tài}}}\\
+        \\
+        \textbf{{\huge Agentic AI Credit Scoring}}\\
+        \textbf{{\Large for Underbanked Populations}}\\
+        \\
+        \hline
+    \end{tabular}
+\end{center}
+
+\vspace{2cm}
+
+\begin{table}[h]
+    \begin{tabular}{rrl}
+        & NHÓM: & \textbf{MLIOT\_STACKOVERFLOWER} \\
+        & SV: & Đỗ Hồng Phúc - 2312672 \\
+        &     & Nguyễn Minh Khánh - 2311518 \\
+        &     & Bành Tiểu My - 2312137 \\
+        &     & Nguyễn Tiến Dũng - 2410609 \\
+        &     & Nguyễn Đoàn Bảo Kha - 2311390 \\
+    \end{tabular}
+\end{table}
+
+\begin{center}
+    {\footnotesize TP. HỒ CHÍ MINH, THÁNG 02/2026}
+\end{center}
+\end{titlepage}
+
+\thispagestyle{empty}
+\newpage
+\selectlanguage{english}
+\tableofcontents
+\newpage
+
+% ============================================================
+% ABSTRACT
+% ============================================================
+\begin{abstract}
+Approximately 1.4 billion adults worldwide remain unbanked, lacking access to formal credit due to the absence of traditional credit bureau history. This paper proposes an Agentic AI-powered credit scoring system that leverages alternative data sources---telecommunications, utility payments, and e-commerce activity---to assess creditworthiness for underbanked populations. The system integrates a LightGBM classifier achieving 0.786 AUC with SHAP-based explainability, an autonomous AI advisory agent that provides personalized credit assessments through multi-step reasoning and interactive consultation, and a FICO-compatible scoring framework (300--850). The proposed architecture employs AWS cloud services including Amazon SageMaker, AWS Lambda, and Amazon Bedrock to enable scalable, production-ready deployment. The agentic component autonomously analyzes applicant profiles, generates risk explanations, suggests improvement actions, and engages in multi-turn advisory conversations---demonstrating true autonomous decision support in financial services.
+\end{abstract}
+
+\noindent\textbf{\textit{Index Terms}}---Credit scoring, agentic AI, explainable AI, financial inclusion, LightGBM, SHAP, underbanked, alternative data.
+
+\vspace{1em}
+
+% ============================================================
+% I. INTRODUCTION
+% ============================================================
+\section{Introduction}
+
+The World Bank estimates that approximately 1.4 billion adults globally lack access to formal financial services \cite{worldbank2021}. Traditional credit scoring systems rely heavily on credit bureau data, which inherently excludes individuals without prior borrowing history---creating a paradox where those who need credit most cannot obtain it \cite{fico2020}.
+
+Recent advances in machine learning and alternative data sources present an opportunity to bridge this gap. Telecommunications usage patterns, utility payment histories, and e-commerce behavior can serve as proxies for creditworthiness when conventional data is unavailable \cite{bjorkegren2019}.
+
+Furthermore, the emergence of Agentic AI---autonomous systems capable of multi-step reasoning, tool utilization, and goal-directed behavior---enables a paradigm shift from static scoring to dynamic, interactive credit advisory \cite{wang2024agents}. An agentic approach allows the system to not only predict default risk but also autonomously explain decisions, suggest actionable improvements, and engage in contextual dialogue with applicants.
+
+This paper presents an end-to-end credit scoring solution that combines: (1) a gradient boosting model trained on 307,511 loan applications with 198 engineered features achieving 0.786 AUC; (2) SHAP-based model explainability producing human-readable risk factor analysis; (3) an autonomous AI advisory agent powered by large language models (LLMs) providing personalized credit consultations; and (4) a cloud-native architecture leveraging AWS services for scalable deployment.
+
+% ============================================================
+% II. PROJECT SCOPE & REQUIREMENTS
+% ============================================================
+\section{Project Scope and Requirements}
+
+\subsection{Problem Statement}
+Design an intelligent credit scoring system that can accurately assess default risk for loan applicants who lack traditional credit bureau history, while providing transparent, explainable decisions and autonomous advisory support.
+
+\subsection{Target Users}
+\begin{itemize}
+    \item \textbf{Primary}: Underbanked individuals in emerging markets (e.g., Vietnam) applying for their first formal loan.
+    \item \textbf{Secondary}: Loan officers requiring AI-assisted decision support with explainable risk assessments.
+\end{itemize}
+
+\subsection{Data Strategy}
+The system utilizes the Home Credit Default Risk dataset \cite{homecredit2018}, comprising eight interrelated tables (Table~\ref{tab:data}).
+
+\begin{table}[htbp]
+\caption{Dataset Summary}
+\label{tab:data}
+\centering
+\small
+\begin{tabular}{lrl}
+\toprule
+\textbf{Table} & \textbf{Rows} & \textbf{Description} \\
+\midrule
+application\_train & 307,511 & Primary loan applications \\
+bureau & 1,716,428 & External credit history \\
+bureau\_balance & 27,299,925 & Monthly bureau balances \\
+previous\_application & 1,670,214 & Prior Home Credit apps \\
+installments\_payments & 13,605,401 & Installment history \\
+POS\_CASH\_balance & 10,001,358 & POS/cash balances \\
+credit\_card\_balance & 3,840,312 & Credit card data \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The data strategy incorporates three alternative credit scoring sources as key features: (1) telecommunications score (payment regularity, SIM tenure), (2) utility score (electricity/water bill payments), and (3) e-commerce score (account age, transaction history). These proxy features enable credit assessment without traditional bureau data.
+
+\subsection{Functional Requirements}
+\begin{enumerate}
+    \item \textbf{R1}: Predict default probability with AUC $\geq 0.75$.
+    \item \textbf{R2}: Generate FICO-compatible scores (300--850).
+    \item \textbf{R3}: Provide SHAP-based explanations for each prediction.
+    \item \textbf{R4}: Autonomous AI agent for credit advisory and Q\&A.
+    \item \textbf{R5}: Suggest credit limits based on risk tier and income.
+    \item \textbf{R6}: Support interactive multi-turn advisory conversations.
+    \item \textbf{R7}: Deploy on AWS cloud with auto-scaling capabilities.
+\end{enumerate}
+
+% ============================================================
+% III. SOLUTION DESIGN
+% ============================================================
+\section{Solution Design}
+
+\subsection{System Architecture}
+
+The system follows a three-layer architecture (Fig.~\ref{fig:arch}): (1) a \textit{Data \& ML Layer} for model training and feature engineering, (2) a \textit{Scoring \& Explainability Layer} for real-time inference, and (3) an \textit{Agentic AI Layer} for autonomous advisory.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=0.4cm and 0.3cm,
+    box/.style={rectangle, draw, rounded corners=3pt, minimum height=0.7cm, minimum width=2.2cm, font=\scriptsize\sffamily, align=center, thick},
+    awsbox/.style={box, fill=orange!15, draw=orange!70},
+    mlbox/.style={box, fill=blue!12, draw=blue!60},
+    aibox/.style={box, fill=green!12, draw=green!60},
+    uibox/.style={box, fill=purple!12, draw=purple!60},
+    arrow/.style={-{Stealth[length=2mm]}, thick, draw=gray!70},
+]
+
+% === Layer 1: Data & ML ===
+\node[awsbox] (s3) {Amazon S3\\Data Lake};
+\node[awsbox, right=of s3] (sage) {SageMaker\\Training};
+\node[mlbox, right=of sage] (lgbm) {LightGBM\\AUC 0.786};
+
+% === Layer 2: Scoring ===
+\node[awsbox, below=0.8cm of s3] (lambda) {AWS Lambda\\Inference};
+\node[mlbox, right=of lambda] (shap) {SHAP\\Explainer};
+\node[mlbox, right=of shap] (fico) {FICO\\300--850};
+
+% === Layer 3: Agentic AI ===
+\node[aibox, below=0.8cm of lambda] (bedrock) {Amazon\\Bedrock};
+\node[aibox, right=of bedrock] (agent) {AI Advisory\\Agent};
+\node[aibox, right=of agent] (step) {Step Functions\\Orchestrator};
+
+% === Layer 4: Frontend ===
+\node[uibox, below=0.8cm of bedrock] (api) {API Gateway};
+\node[uibox, right=of api] (ui) {Streamlit\\Web App};
+\node[awsbox, right=of ui] (cognito) {Cognito\\Auth};
+
+% === Arrows ===
+\draw[arrow] (s3) -- (sage);
+\draw[arrow] (sage) -- (lgbm);
+\draw[arrow] (lgbm) -- (shap);
+\draw[arrow] (s3) -- (lambda);
+\draw[arrow] (lambda) -- (shap);
+\draw[arrow] (shap) -- (fico);
+\draw[arrow] (fico) -- (agent);
+\draw[arrow] (bedrock) -- (agent);
+\draw[arrow] (agent) -- (step);
+\draw[arrow] (step) -- (api);
+\draw[arrow] (api) -- (ui);
+\draw[arrow] (cognito) -- (ui);
+
+% === Layer labels ===
+\node[left=0.1cm of s3, font=\tiny\bfseries\sffamily, text=gray] {Data \& ML};
+\node[left=0.1cm of lambda, font=\tiny\bfseries\sffamily, text=gray] {Scoring};
+\node[left=0.1cm of bedrock, font=\tiny\bfseries\sffamily, text=gray] {Agentic AI};
+\node[left=0.1cm of api, font=\tiny\bfseries\sffamily, text=gray] {Frontend};
+
+\end{tikzpicture}
+}
+\caption{System architecture with AWS services and Agentic AI components.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Machine Learning Pipeline}
+
+The ML pipeline processes raw application data through several stages:
+
+\textbf{Feature Engineering}: 198 features are constructed from seven source tables, including financial ratios (credit-to-income, annuity-to-income), external source aggregates, social network default indicators, and cross-table behavioral features. A 5-fold Stratified K-Fold cross-validation achieves 0.786 AUC.
+
+\textbf{FICO Scoring}: Default probabilities are converted to FICO-compatible scores using a log-odds transformation:
+\begin{equation}
+\text{FICO} = 600 - \frac{40}{\ln 2} \cdot \ln\!\left(\frac{p}{1-p}\right) - \text{penalties}
+\label{eq:fico}
+\end{equation}
+where $p$ is the raw default probability, and penalties account for no-history status ($-20$ points) and unreliable external source values ($-15$ per source).
+
+\textbf{Probability Calibration}: Isotonic regression calibrates raw model probabilities to reflect true default rates, ensuring reliable probability estimates for decision-making.
+
+\subsection{Agentic AI Advisory System}
+
+The core innovation lies in the \textbf{autonomous AI advisory agent}, which operates through the following agentic workflow (Fig.~\ref{fig:agent}):
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=0.35cm and 0.2cm,
+    stepbox/.style={rectangle, draw, rounded corners=3pt, fill=green!8, minimum height=0.65cm, minimum width=2cm, font=\scriptsize\sffamily, align=center, thick, draw=green!50!black},
+    tool/.style={rectangle, draw, rounded corners=3pt, fill=yellow!15, minimum height=0.55cm, minimum width=1.5cm, font=\tiny\sffamily, align=center, draw=yellow!60!black},
+    arrow/.style={-{Stealth[length=2mm]}, thick, draw=gray!60},
+    decision/.style={diamond, draw, fill=orange!10, minimum height=0.6cm, minimum width=0.6cm, font=\tiny\sffamily, align=center, inner sep=1pt, draw=orange!60!black},
+]
+
+% Main flow
+\node[stepbox] (input) {1. Receive\\Applicant Data};
+\node[stepbox, right=of input] (score) {2. Score \&\\Explain};
+\node[stepbox, right=of score] (analyze) {3. Autonomous\\Analysis};
+\node[stepbox, below=0.6cm of input] (recommend) {4. Generate\\Recommendations};
+\node[decision, right=of recommend] (decide) {User\\Query?};
+\node[stepbox, right=of decide] (chat) {5. Interactive\\Advisory};
+\node[stepbox, below=0.6cm of recommend] (fallback) {6. Fallback\\(Template)};
+
+% Tools
+\node[tool, above=0.25cm of score] (t1) {LightGBM};
+\node[tool, above=0.25cm of analyze] (t2) {SHAP Tool};
+\node[tool, above=0.25cm of chat] (t3) {LLM API};
+
+% Arrows
+\draw[arrow] (input) -- (score);
+\draw[arrow] (score) -- (analyze);
+\draw[arrow] (analyze) -- (recommend);
+\draw[arrow] (recommend) -- (decide);
+\draw[arrow] (decide) -- node[above, font=\tiny] {Yes} (chat);
+\draw[arrow] (decide) -- node[left, font=\tiny] {No} (fallback);
+\draw[arrow] (chat.south) -- ++(0,-0.4) -| (decide);
+\draw[arrow] (t1) -- (score);
+\draw[arrow] (t2) -- (analyze);
+\draw[arrow] (t3) -- (chat);
+
+\end{tikzpicture}
+}
+\caption{Agentic AI workflow: multi-step autonomous credit advisory with tool use and iterative consultation.}
+\label{fig:agent}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{Perception}: The agent receives raw applicant data and invokes the scoring engine as a tool to obtain default probability, FICO score, and SHAP explanations.
+    \item \textbf{Analysis}: Using SHAP values as structured input, the agent autonomously identifies strengths, weaknesses, and risk factors in the applicant's profile.
+    \item \textbf{Planning}: The agent formulates personalized recommendations based on which features contribute most to risk (e.g., high credit-to-income ratio $\rightarrow$ suggest reducing loan amount).
+    \item \textbf{Action}: The agent generates a comprehensive credit assessment report in natural language, including risk overview, detailed factor analysis, and 3--5 actionable improvement steps.
+    \item \textbf{Interaction}: Through multi-turn dialogue, the agent answers follow-up questions, explains specific risk factors, and provides contextual financial advice---maintaining conversation state across turns.
+    \item \textbf{Resilience}: A multi-model fallback chain ensures service continuity; if the primary LLM is unavailable, the agent automatically tries alternative models before falling back to a rule-based template engine.
+\end{enumerate}
+
+This agentic architecture distinguishes the system from traditional credit scoring by providing \textit{autonomous, explainable, and interactive} decision support rather than mere numerical outputs.
+
+\subsection{AWS Cloud Architecture}
+
+The production deployment leverages the following AWS services:
+
+\begin{itemize}
+    \item \textbf{Amazon SageMaker}: Model training, hyperparameter tuning, and hosting of the LightGBM model with auto-scaling endpoints.
+    \item \textbf{AWS Lambda}: Serverless inference functions for real-time credit scoring with sub-second latency.
+    \item \textbf{Amazon Bedrock}: Managed LLM access for the AI advisory agent, replacing direct API calls with enterprise-grade model hosting.
+    \item \textbf{AWS Step Functions}: Orchestration of the agentic workflow---coordinating scoring, explanation, and advisory steps.
+    \item \textbf{Amazon S3}: Data lake for training data, model artifacts, and feature stores.
+    \item \textbf{Amazon API Gateway}: RESTful API endpoints with rate limiting and authentication.
+    \item \textbf{Amazon Cognito}: User authentication and authorization management.
+    \item \textbf{Amazon CloudWatch}: Monitoring, logging, and alerting for model performance drift detection.
+\end{itemize}
+
+% ============================================================
+% IV. PROJECT PLAN
+% ============================================================
+\section{Project Plan}
+
+The project follows an agile sprint-based approach over five weeks, from January 16 to February 19, 2026 (Fig.~\ref{fig:gantt}).
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{ganttchart}[
+    hgrid,
+    vgrid,
+    x unit=1.8cm,
+    y unit title=0.5cm,
+    y unit chart=0.45cm,
+    title height=1,
+    bar height=0.5,
+    bar top shift=0.2,
+    title label font=\small\bfseries,
+    bar label font=\small,
+    group label font=\small\bfseries,
+    milestone label font=\small\itshape,
+    bar/.append style={fill=blue!25, draw=blue!60},
+    group/.append style={fill=gray!20, draw=gray!50, fill opacity=0.6},
+    milestone/.append style={fill=red!50, draw=red!70},
+]{1}{5}
+
+\gantttitle{Jan 16 -- Feb 19, 2026}{5} \\
+\gantttitle{W1}{1}
+\gantttitle{W2}{1}
+\gantttitle{W3}{1}
+\gantttitle{W4}{1}
+\gantttitle{W5}{1} \\
+
+% Phase 1: Data
+\ganttbar[bar/.append style={fill=teal!30, draw=teal!60}]{Data collection \& EDA}{1}{1} \\
+\ganttbar[bar/.append style={fill=teal!30, draw=teal!60}]{Feature engineering}{1}{2} \\
+
+% Phase 2: ML
+\ganttbar[bar/.append style={fill=blue!30, draw=blue!60}]{Baseline model (48 feat.)}{1}{2} \\
+\ganttbar[bar/.append style={fill=blue!30, draw=blue!60}]{Advanced model (198 feat.)}{2}{3} \\
+\ganttbar[bar/.append style={fill=blue!30, draw=blue!60}]{Calibration \& SHAP}{2}{3} \\
+\ganttmilestone{AUC 0.786}{3} \\
+
+% Phase 3: Agentic AI & Web
+\ganttbar[bar/.append style={fill=green!25, draw=green!60}]{Scoring engine \& FICO}{3}{3} \\
+\ganttbar[bar/.append style={fill=green!25, draw=green!60}]{LLM advisory agent}{3}{4} \\
+\ganttbar[bar/.append style={fill=green!25, draw=green!60}]{Streamlit UI \& auth}{3}{4} \\
+
+% Phase 4: Polish
+\ganttbar[bar/.append style={fill=orange!25, draw=orange!60}]{Multi-turn chat \& fallback}{4}{5} \\
+\ganttbar[bar/.append style={fill=orange!25, draw=orange!60}]{Docker containerization}{4}{5} \\
+\ganttbar[bar/.append style={fill=orange!25, draw=orange!60}]{AWS architecture plan}{5}{5} \\
+
+% Phase 5: Docs
+\ganttbar[bar/.append style={fill=purple!20, draw=purple!50}]{Testing \& documentation}{5}{5} \\
+\ganttmilestone{Final submission}{5} \\
+
+\end{ganttchart}
+}
+
+\vspace{0.3cm}
+% Legend
+\centering
+\small
+\begin{tabular}{@{}l@{\hspace{4pt}}l@{\hspace{12pt}}l@{\hspace{4pt}}l@{\hspace{12pt}}l@{\hspace{4pt}}l@{\hspace{12pt}}l@{\hspace{4pt}}l@{\hspace{12pt}}l@{\hspace{4pt}}l@{}}
+\tikz\draw[fill=teal!30, draw=teal!60] (0,0) rectangle (0.35,0.2); & Data &
+\tikz\draw[fill=blue!30, draw=blue!60] (0,0) rectangle (0.35,0.2); & ML &
+\tikz\draw[fill=green!25, draw=green!60] (0,0) rectangle (0.35,0.2); & AI \& Web &
+\tikz\draw[fill=orange!25, draw=orange!60] (0,0) rectangle (0.35,0.2); & Deploy &
+\tikz\draw[fill=purple!20, draw=purple!50] (0,0) rectangle (0.35,0.2); & Docs \\
+\end{tabular}
+
+\caption{Project GANTT chart: 5-week hackathon sprint (Jan 16 -- Feb 19, 2026).}
+\label{fig:gantt}
+\end{figure}
+
+\textbf{Phase 1 --- Sprint 1 (Week 1, Jan 16--22)}: Data acquisition from the Home Credit Kaggle competition, exploratory data analysis, data cleaning (handling columns with 60\%+ null values), and initial feature engineering across seven source tables.
+
+\textbf{Phase 2 --- Sprint 2 (Weeks 1--3, Jan 16 -- Feb 5)}: Iterative model development---baseline LightGBM with 48 features (AUC 0.767), then advanced multi-table model with 198 engineered features (AUC 0.786). Isotonic probability calibration and SHAP TreeExplainer integration for model interpretability.
+
+\textbf{Phase 3 --- Sprint 3 (Weeks 3--4, Jan 30 -- Feb 12)}: Parallel development of the scoring engine (FICO 300--850 transform), Agentic AI advisory system (OpenRouter LLM integration, multi-model fallback chain), and Streamlit web application with Vietnamese localization and authentication.
+
+\textbf{Phase 4 --- Sprint 4 (Weeks 4--5, Feb 6--19)}: System polish---multi-turn chat, template-based fallback engine, Docker containerization, and AWS cloud architecture planning (SageMaker, Lambda, Bedrock, Step Functions).
+
+\textbf{Phase 5 --- Sprint 5 (Week 5, Feb 13--19)}: End-to-end integration testing, technical documentation, proposal report writing, and final submission preparation.
+
+% ============================================================
+% V. FEASIBILITY ANALYSIS
+% ============================================================
+\section{Feasibility Analysis}
+
+\subsection{Technical Feasibility}
+The solution builds upon proven technologies: LightGBM is a well-established gradient boosting framework \cite{ke2017lightgbm}, SHAP provides theoretically grounded feature attributions \cite{lundberg2017shap}, and AWS offers mature managed services for ML deployment. The current prototype demonstrates technical viability with 0.786 AUC and real-time inference capability.
+
+\subsection{Economic Feasibility}
+AWS Lambda's pay-per-invocation model and SageMaker's serverless inference endpoints minimize operational costs. The estimated monthly cost for 100,000 predictions is approximately \$50--150 USD, making the solution viable for microfinance institutions in emerging markets. Free-tier LLM models (via Amazon Bedrock Lite or OpenRouter) reduce AI advisory costs to near-zero.
+
+\subsection{AI-Related Risks}
+
+\begin{table}[htbp]
+\caption{AI Risk Assessment and Mitigation Strategies}
+\label{tab:risks}
+\centering
+\small
+\begin{tabular}{p{1.4cm}p{1.2cm}p{4.5cm}}
+\toprule
+\textbf{Risk} & \textbf{Severity} & \textbf{Mitigation} \\
+\midrule
+Algorithmic bias & High & SHAP auditing for protected attributes; fairness constraints in training \\
+\addlinespace
+Model drift & Medium & CloudWatch monitoring; periodic retraining with fresh data \\
+\addlinespace
+LLM hallucination & Medium & Structured prompts; SHAP-grounded responses; template fallback \\
+\addlinespace
+Data privacy & High & AWS encryption at rest/transit; GDPR-compliant data handling; no PII in LLM calls \\
+\addlinespace
+Adversarial input & Low & Input validation; EXT\_SOURCE anti-gaming logic (cap at 750 FICO for suspicious values) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Regulatory Compliance}
+The system addresses regulatory requirements through: (1) SHAP-based explainability satisfying ``right to explanation'' mandates under GDPR Article 22 \cite{gdpr2016}; (2) five-tier decision framework (auto-approve, manual review, reject) ensuring human-in-the-loop for borderline cases; and (3) comprehensive audit logging via CloudWatch for regulatory examination.
+
+% ============================================================
+% VI. CONCLUSION
+% ============================================================
+\section{Conclusion}
+
+This paper presented an Agentic AI credit scoring system designed for underbanked populations, combining LightGBM-based risk prediction (AUC 0.786), SHAP explainability, FICO-compatible scoring, and an autonomous AI advisory agent. The system demonstrates that alternative data sources---telecommunications, utility, and e-commerce scores---can effectively substitute for traditional credit bureau data. The agentic AI component elevates the system beyond static scoring into interactive, explainable financial advisory, while the AWS cloud architecture ensures scalable, production-ready deployment. Future work includes incorporating federated learning for privacy-preserving model updates and expanding the agent's capabilities with real-time financial data integration.
+
+% ============================================================
+% REFERENCES
+% ============================================================
+\bibliographystyle{IEEEtran}
+
+\begin{thebibliography}{10}
+
+\bibitem{worldbank2021}
+A.~Demirgüç-Kunt, L.~Klapper, D.~Singer, and S.~Ansar, ``The Global Findex Database 2021: Financial inclusion, digital payments, and resilience in the age of COVID-19,'' \textit{World Bank Group}, 2022.
+
+\bibitem{fico2020}
+FICO, ``FICO Score: Understanding credit scores,'' Fair Isaac Corporation, Tech. Rep., 2020. [Online]. Available: \url{https://www.fico.com/}
+
+\bibitem{bjorkegren2019}
+D.~Björkegren and D.~Grissen, ``Behavior revealed in mobile phone usage predicts credit repayment,'' \textit{The World Bank Economic Review}, vol.~34, no.~3, pp.~618--634, 2020.
+
+\bibitem{wang2024agents}
+L.~Wang \textit{et~al.}, ``A survey on large language model based autonomous agents,'' \textit{Frontiers of Computer Science}, vol.~18, no.~6, 2024.
+
+\bibitem{homecredit2018}
+Home Credit Group, ``Home Credit Default Risk,'' Kaggle Competition, 2018. [Online]. Available: \url{https://www.kaggle.com/c/home-credit-default-risk}
+
+\bibitem{ke2017lightgbm}
+G.~Ke \textit{et~al.}, ``LightGBM: A highly efficient gradient boosting decision tree,'' in \textit{Proc. NeurIPS}, 2017, pp.~3146--3154.
+
+\bibitem{lundberg2017shap}
+S.~M. Lundberg and S.-I.~Lee, ``A unified approach to interpreting model predictions,'' in \textit{Proc. NeurIPS}, 2017, pp.~4765--4774.
+
+\bibitem{gdpr2016}
+European Parliament, ``Regulation (EU) 2016/679 (General Data Protection Regulation),'' \textit{Official Journal of the European Union}, 2016.
+
+\end{thebibliography}
+
+\end{document}
